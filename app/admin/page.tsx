@@ -13,6 +13,8 @@ import { trpc } from '@/lib/trpc-client'
 type DraftState = { players: Player[]; teams: Team[] }
 
 export default function AdminPage() {
+  // Note: middleware enforces access, this is defense-in-depth if client renders without groups
+  const [unauthorized, setUnauthorized] = useState(false)
   const [state, setState] = useState<DraftState>({ players: [], teams: [] })
   const [loading, setLoading] = useState(true)
 
@@ -24,7 +26,7 @@ export default function AdminPage() {
   }
 
   useEffect(() => {
-    load()
+    load().catch(() => setUnauthorized(true))
   }, [])
 
   // Add Jellycat form
@@ -66,6 +68,7 @@ export default function AdminPage() {
   const availablePlayers = useMemo(() => state.players.filter((p) => !p.drafted), [state.players])
 
   if (loading) return <div className="p-6">Loading…</div>
+  if (unauthorized) return <div className="p-6">Not authorized</div>
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-50 via-purple-50 to-blue-50 p-6">
