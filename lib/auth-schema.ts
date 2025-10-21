@@ -76,11 +76,13 @@ export async function ensureAuthSchemaPostgres(db: Kysely<any>) {
       identifier TEXT NOT NULL UNIQUE,
       value TEXT NOT NULL,
       "expiresAt" TIMESTAMPTZ NOT NULL,
-      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `.execute(db);
   await sql`ALTER TABLE verification ADD COLUMN IF NOT EXISTS "expiresAt" TIMESTAMPTZ`.execute(db);
   await sql`ALTER TABLE verification ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()`.execute(db);
+  await sql`ALTER TABLE verification ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()`.execute(db);
 
   // rate limit storage: table name is case-sensitive in queries (model: "rateLimit")
   await sql`
