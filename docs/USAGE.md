@@ -4,11 +4,11 @@ This guide covers running, configuring, and exploring the fantasy draft app with
 
 ## Quick Start
 
-Install dependencies (pnpm preferred):
+Install dependencies (Bun):
 
 ```
-pnpm install
-pnpm dev
+bun install
+bun run dev
 ```
 
 The dev server uses the SQLite DAL by default and auto-seeds demo data plus plushie "jellycat" players (from `public/jellycats`).
@@ -28,7 +28,7 @@ Configure via `DB_DRIVER` env var:
 ### Switching Drivers
 
 ```
-DB_DRIVER=postgres DATABASE_URL=postgres://user:pass@host/db pnpm dev
+DB_DRIVER=postgres DATABASE_URL=postgres://user:pass@host/db bun run dev
 ```
 
 If unset in development, it falls back to SQLite and creates/updates `dev.sqlite` eagerly.
@@ -72,7 +72,7 @@ Env overrides:
 Run all tests:
 
 ```
-pnpm test
+bun test
 ```
 
 Postgres unit tests mock SQL with normalized pattern matching. The ClickHouse mock tests exercise the overlay logic and ensure points updates flow correctly.

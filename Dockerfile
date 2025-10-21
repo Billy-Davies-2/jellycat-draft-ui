@@ -7,7 +7,8 @@ WORKDIR /app
 
 # Only copy the manifests first for better layer caching
 COPY package.json ./
-# If you have a bun.lockb, copy it too for reproducible installs
+# If you have a bun.lock or bun.lockb, copy it for reproducible installs
+COPY bun.lock ./
 COPY bun.lockb* ./
 
 # Toolchain for native modules needed by node-gyp (e.g., better-sqlite3)
@@ -17,7 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install only production deps (exclude dev)
 ENV NODE_ENV=production
-RUN bun install --production --no-progress --frozen-lockfile
+RUN bun install --production --no-progress --frozen-lockfile --ignore-scripts
 
 # Copy the rest of the source
 COPY . .

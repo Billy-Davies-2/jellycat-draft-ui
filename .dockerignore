@@ -1,6 +1,5 @@
 # Dependency directories
 node_modules
-.pnpm-store
 
 # Build output
 .next
@@ -11,7 +10,10 @@ dist
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-pnpm-debug.log*
+# npm/pnpm/yarn logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # Local env and editor
 .env*

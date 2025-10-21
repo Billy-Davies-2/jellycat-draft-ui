@@ -28,7 +28,7 @@ Set `DB_DRIVER` to select:
 ## Development
 
 ```
-pnpm install (or bun install)
+bun install
 bun run dev
 ```
 
