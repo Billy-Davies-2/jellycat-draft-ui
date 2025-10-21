@@ -28,19 +28,19 @@ export async function middleware(req: NextRequest) {
   const baseUrl = resolveBaseUrl(req);
   const sessionCookie = getSessionCookie(req);
 
-  // If no session cookie, redirect to sign-in
+  // If no session cookie, redirect to sign-in handoff page
   if (!sessionCookie) {
-    const signInUrl = new URL("/api/auth/sign-in/oauth2", baseUrl);
+    const loginUrl = new URL("/login", baseUrl);
     const callbackUrl = new URL(req.nextUrl.pathname + req.nextUrl.search, baseUrl);
-    signInUrl.searchParams.set("providerId", "authentik");
-    signInUrl.searchParams.set("callbackURL", callbackUrl.toString());
-    return NextResponse.redirect(signInUrl);
+    loginUrl.searchParams.set("callbackURL", callbackUrl.toString());
+    return NextResponse.redirect(loginUrl);
   }
 
   // Server-side session check to read roles/claims
   const adminGroup = process.env.AUTH_ADMIN_GROUP || "admins";
   try {
-    const sessionEndpoint = new URL("/api/auth/session", baseUrl);
+  // Better Auth exposes GET /get-session under the configured basePath
+  const sessionEndpoint = new URL("/api/auth/get-session", baseUrl);
     const res = await fetch(sessionEndpoint.toString(), {
       headers: {
         // Forward cookies for session validation
@@ -51,12 +51,11 @@ export async function middleware(req: NextRequest) {
     });
 
     if (!res.ok) {
-      // If session endpoint says unauthenticated, redirect to sign-in
-      const signInUrl = new URL("/api/auth/sign-in/oauth2", baseUrl);
+      // If session endpoint says unauthenticated, redirect to sign-in handoff page
+      const loginUrl = new URL("/login", baseUrl);
       const callbackUrl = new URL(req.nextUrl.pathname + req.nextUrl.search, baseUrl);
-      signInUrl.searchParams.set("providerId", "authentik");
-      signInUrl.searchParams.set("callbackURL", callbackUrl.toString());
-      return NextResponse.redirect(signInUrl);
+      loginUrl.searchParams.set("callbackURL", callbackUrl.toString());
+      return NextResponse.redirect(loginUrl);
     }
 
     const data = await res.json().catch(() => null);
@@ -83,12 +82,11 @@ export async function middleware(req: NextRequest) {
     // Authenticated but not an admin → 403
     return new NextResponse("Forbidden", { status: 403 });
   } catch (_err) {
-    // On error, be safe and redirect to sign-in
-    const signInUrl = new URL("/api/auth/sign-in/oauth2", baseUrl);
+    // On error, be safe and redirect to sign-in handoff page
+    const loginUrl = new URL("/login", baseUrl);
     const callbackUrl = new URL(req.nextUrl.pathname + req.nextUrl.search, baseUrl);
-    signInUrl.searchParams.set("providerId", "authentik");
-    signInUrl.searchParams.set("callbackURL", callbackUrl.toString());
-    return NextResponse.redirect(signInUrl);
+    loginUrl.searchParams.set("callbackURL", callbackUrl.toString());
+    return NextResponse.redirect(loginUrl);
   }
 }
 
