@@ -67,6 +67,7 @@ export async function ensureAuthSchemaPostgres(db: Kysely<any>) {
   // session (lowercase table, camelCase columns)
   await sql`
     CREATE TABLE IF NOT EXISTS session (
+      id TEXT,
       token TEXT PRIMARY KEY,
       "userId" TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       "expiresAt" TIMESTAMPTZ NOT NULL,
@@ -76,6 +77,15 @@ export async function ensureAuthSchemaPostgres(db: Kysely<any>) {
       "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `.execute(db);
+  // Ensure id column exists and is populated and constrained
+  await sql`ALTER TABLE session ADD COLUMN IF NOT EXISTS id TEXT`.execute(db);
+  // Set a default generator for id if not present (uses built-in md5/random/clock_timestamp)
+  await sql`ALTER TABLE session ALTER COLUMN id SET DEFAULT md5(random()::text || clock_timestamp()::text)`.execute(db);
+  // Backfill null ids
+  await sql`UPDATE session SET id = COALESCE(id, md5(random()::text || clock_timestamp()::text)) WHERE id IS NULL`.execute(db);
+  // Add uniqueness and not-null constraints for id to match Better Auth expectations
+  await sql`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'session_id_unique') THEN ALTER TABLE session ADD CONSTRAINT session_id_unique UNIQUE (id); END IF; END $$;`.execute(db);
+  await sql`ALTER TABLE session ALTER COLUMN id SET NOT NULL`.execute(db);
   // Coerce to expected types
   await sql`ALTER TABLE session ALTER COLUMN token TYPE TEXT`.execute(db);
   await sql`ALTER TABLE session ALTER COLUMN "userId" TYPE TEXT`.execute(db);
