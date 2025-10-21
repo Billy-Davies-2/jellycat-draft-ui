@@ -18,9 +18,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install only production deps (exclude dev)
 ENV NODE_ENV=production
-# Allow Bun to reconcile lockfile during containerized builds explicitly at install-time.
-# Remove --production to avoid lockfile pruning (which triggers freeze) and avoid lockfile writes with --no-save.
-RUN CI=0 BUN_INSTALL_FROZEN_LOCKFILE=0 bun install --no-progress --ignore-scripts --no-save
+# Production install only (dev deps excluded). bun.lock is now up-to-date so pruning won't trigger freeze.
+RUN CI=0 BUN_INSTALL_FROZEN_LOCKFILE=0 bun install --production --no-progress --ignore-scripts
 
 # Copy the rest of the source
 COPY . .
