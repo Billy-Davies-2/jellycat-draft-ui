@@ -1,5 +1,8 @@
 import { betterAuth } from "better-auth";
 import { genericOAuth } from "better-auth/plugins";
+import Database from "better-sqlite3";
+import { Kysely, PostgresDialect } from "kysely";
+import { Pool } from "pg";
 
 // Base URL for Better Auth to construct callback routes
 // Prefer AUTH_URL (generic), then NEXTAUTH_URL, then NEXT_PUBLIC_APP_URL, then PUBLIC_BASE_URL
@@ -18,9 +21,35 @@ const AUTHENTIK_CLIENT_SECRET = process.env.AUTHENTIK_CLIENT_SECRET || "";
 // In development without DB, Better Auth falls back to in-memory storage.
 // For production, configure a database adapter per docs.
 
+// Configure database adapter: Postgres in production, SQLite in development
+function getDatabaseOption(): any {
+  if (process.env.NODE_ENV === "production") {
+    const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL || "";
+    const pool = new Pool({ connectionString });
+    const kysely = new Kysely({ dialect: new PostgresDialect({ pool }) });
+    return {
+      database: {
+        db: kysely,
+        type: "postgres" as const,
+      },
+    };
+  }
+  // dev: use a local SQLite file
+  const sqlitePath = process.env.AUTH_SQLITE_PATH || "dev.sqlite";
+  const db = new Database(sqlitePath);
+  return {
+    database: db,
+  };
+}
+
 export const auth = betterAuth({
+  ...getDatabaseOption(),
   baseURL: `${BASE_URL}/api/auth`,
-  // session cookies config can be customized here if needed
+  secret: process.env.BETTER_AUTH_SECRET,
+  emailAndPassword: {
+    enabled: true,
+    autoSignIn: true,
+  },
   plugins: [
     genericOAuth({
       config: [
@@ -28,17 +57,12 @@ export const auth = betterAuth({
           providerId: "authentik",
           clientId: AUTHENTIK_CLIENT_ID,
           clientSecret: AUTHENTIK_CLIENT_SECRET,
-          // Use OIDC discovery if base URL provided
           discoveryUrl: AUTHENTIK_URL
             ? `${AUTHENTIK_URL.replace(/\/$/, "")}/.well-known/openid-configuration`
             : undefined,
           scopes: ["openid", "profile", "email", "groups"],
-          // Ensure redirect URI aligns with Better Auth default callback
-          // <BASE_URL>/api/auth/oauth2/callback/<providerId>
           redirectURI: `${BASE_URL.replace(/\/$/, "")}/api/auth/oauth2/callback/authentik`,
-          // Minimal mapping to ensure user objects have id/email/name
           mapProfileToUser: async (profile: any) => {
-            // Try common OIDC fields; fall back gracefully
             const id = profile?.sub || profile?.id || profile?.uid || "";
             const email = profile?.email || profile?.preferred_username || undefined;
             const name = profile?.name || profile?.display_name || profile?.preferred_username || undefined;
