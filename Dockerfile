@@ -18,8 +18,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install only production deps (exclude dev)
 ENV NODE_ENV=production
-# Allow Bun to reconcile lockfile during CI build; we still keep scripts disabled to avoid native postinstalls.
-RUN bun install --production --no-progress --ignore-scripts
+# Allow Bun to reconcile lockfile during containerized builds explicitly at install-time.
+# Some CI environments set CI=1 or enforce frozen lockfile; override just for this RUN.
+RUN CI=0 BUN_INSTALL_FROZEN_LOCKFILE=0 bun install --production --no-progress --ignore-scripts
 
 # Copy the rest of the source
 COPY . .
