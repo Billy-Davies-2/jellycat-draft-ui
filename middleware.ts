@@ -10,7 +10,6 @@ function resolveBaseUrl(req: NextRequest): URL {
     process.env.PUBLIC_BASE_URL;
   if (envBase) return new URL(envBase);
 
-  // Build from request headers to avoid 0.0.0.0
   const xfProto = req.headers.get("x-forwarded-proto") || "http";
   const xfHost = (req.headers.get("x-forwarded-host") || req.headers.get("host") || req.nextUrl.host || "localhost").split(",")[0]!.trim();
   const [rawHost, rawPort] = xfHost.split(":");
@@ -26,23 +25,71 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // If there is a Better Auth session cookie, allow access.
-  const session = getSessionCookie(req);
-  if (session) {
-    // TODO: If you need admin flag, consider fetching session from server in a protected API or encoding roles in session custom claims.
-    return NextResponse.next();
+  const baseUrl = resolveBaseUrl(req);
+  const sessionCookie = getSessionCookie(req);
+
+  // If no session cookie, redirect to sign-in
+  if (!sessionCookie) {
+    const signInUrl = new URL("/api/auth/sign-in/oauth2", baseUrl);
+    const callbackUrl = new URL(req.nextUrl.pathname + req.nextUrl.search, baseUrl);
+    signInUrl.searchParams.set("providerId", "authentik");
+    signInUrl.searchParams.set("callbackURL", callbackUrl.toString());
+    return NextResponse.redirect(signInUrl);
   }
 
-  // No dev helpers: fall through to OAuth sign-in
+  // Server-side session check to read roles/claims
+  const adminGroup = process.env.AUTH_ADMIN_GROUP || "admins";
+  try {
+    const sessionEndpoint = new URL("/api/auth/session", baseUrl);
+    const res = await fetch(sessionEndpoint.toString(), {
+      headers: {
+        // Forward cookies for session validation
+        cookie: req.headers.get("cookie") || "",
+      },
+      // Avoid caching at the edge for accuracy
+      cache: "no-store",
+    });
 
-  // Not authenticated -> redirect to Better Auth generic OAuth sign-in (Authentik)
-  const baseUrl = resolveBaseUrl(req);
-  // Better Auth oauth2 sign-in endpoint
-  const signInUrl = new URL("/api/auth/sign-in/oauth2", baseUrl);
-  const callbackUrl = new URL(req.nextUrl.pathname + req.nextUrl.search, baseUrl);
-  signInUrl.searchParams.set("providerId", "authentik");
-  signInUrl.searchParams.set("callbackURL", callbackUrl.toString());
-  return NextResponse.redirect(signInUrl);
+    if (!res.ok) {
+      // If session endpoint says unauthenticated, redirect to sign-in
+      const signInUrl = new URL("/api/auth/sign-in/oauth2", baseUrl);
+      const callbackUrl = new URL(req.nextUrl.pathname + req.nextUrl.search, baseUrl);
+      signInUrl.searchParams.set("providerId", "authentik");
+      signInUrl.searchParams.set("callbackURL", callbackUrl.toString());
+      return NextResponse.redirect(signInUrl);
+    }
+
+    const data = await res.json().catch(() => null);
+
+    // Try multiple likely shapes for groups/roles claims
+    const groups: unknown =
+      data?.user?.groups ??
+      data?.session?.user?.groups ??
+      data?.claims?.groups ??
+      data?.token?.groups ??
+      data?.user?.roles ??
+      data?.session?.user?.roles;
+
+    const groupsArr = Array.isArray(groups)
+      ? groups
+      : typeof groups === "string"
+      ? groups.split(",").map((s) => s.trim()).filter(Boolean)
+      : [];
+
+    if (groupsArr.includes(adminGroup)) {
+      return NextResponse.next();
+    }
+
+    // Authenticated but not an admin → 403
+    return new NextResponse("Forbidden", { status: 403 });
+  } catch (_err) {
+    // On error, be safe and redirect to sign-in
+    const signInUrl = new URL("/api/auth/sign-in/oauth2", baseUrl);
+    const callbackUrl = new URL(req.nextUrl.pathname + req.nextUrl.search, baseUrl);
+    signInUrl.searchParams.set("providerId", "authentik");
+    signInUrl.searchParams.set("callbackURL", callbackUrl.toString());
+    return NextResponse.redirect(signInUrl);
+  }
 }
 
 export const config = {
