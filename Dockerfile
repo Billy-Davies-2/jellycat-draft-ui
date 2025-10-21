@@ -18,7 +18,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install only production deps (exclude dev)
 ENV NODE_ENV=production
-RUN bun install --production --no-progress --frozen-lockfile --ignore-scripts
+# Allow Bun to reconcile lockfile during CI build; we still keep scripts disabled to avoid native postinstalls.
+RUN bun install --production --no-progress --ignore-scripts
 
 # Copy the rest of the source
 COPY . .
