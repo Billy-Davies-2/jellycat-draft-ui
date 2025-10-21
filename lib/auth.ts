@@ -3,6 +3,7 @@ import { genericOAuth } from "better-auth/plugins";
 import Database from "better-sqlite3";
 import { Kysely, PostgresDialect } from "kysely";
 import { Pool } from "pg";
+import { ensureAuthSchemaPostgres } from "@/lib/auth-schema";
 
 // Base URL for Better Auth to construct callback routes
 // Prefer AUTH_URL (generic), then NEXTAUTH_URL, then NEXT_PUBLIC_APP_URL, then PUBLIC_BASE_URL
@@ -27,6 +28,11 @@ function getDatabaseOption(): any {
     const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL || "";
     const pool = new Pool({ connectionString });
     const kysely = new Kysely({ dialect: new PostgresDialect({ pool }) });
+    // Ensure required tables exist (users, account, session, verification, ratelimit)
+    // This runs once at startup in the app process; it is idempotent.
+    ensureAuthSchemaPostgres(kysely).catch((err) => {
+      console.error("Failed to ensure Better Auth schema:", err);
+    });
     return {
       database: {
         db: kysely,
