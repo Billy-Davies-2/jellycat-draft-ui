@@ -10,8 +10,14 @@ COPY package.json ./
 # If you have a bun.lockb, copy it too for reproducible installs
 COPY bun.lockb* ./
 
-# Install deps (dev deps included for build)
-RUN bun install
+# Toolchain for native modules needed by node-gyp (e.g., better-sqlite3)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install only production deps (exclude dev)
+ENV NODE_ENV=production
+RUN bun install --production --no-progress --frozen-lockfile
 
 # Copy the rest of the source
 COPY . .
