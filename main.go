@@ -4,13 +4,17 @@ import (
 	"encoding/json"
 	"html/template"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"time"
 
 	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/dal"
+	grpcserver "github.com/Billy-Davies-2/jellycat-draft-ui/internal/grpc"
 	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/handlers"
 	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/pubsub"
+	pb "github.com/Billy-Davies-2/jellycat-draft-ui/proto"
+	"google.golang.org/grpc"
 )
 
 var (
@@ -60,6 +64,27 @@ func main() {
 		log.Fatalf("Failed to parse templates: %v", tmplErr)
 	}
 	log.Printf("Templates loaded successfully")
+
+	// Start gRPC server in a goroutine
+	grpcPort := os.Getenv("GRPC_PORT")
+	if grpcPort == "" {
+		grpcPort = "50051"
+	}
+	
+	go func() {
+		lis, err := net.Listen("tcp", "0.0.0.0:"+grpcPort)
+		if err != nil {
+			log.Fatalf("Failed to listen for gRPC: %v", err)
+		}
+
+		grpcServer := grpc.NewServer()
+		pb.RegisterDraftServiceServer(grpcServer, grpcserver.NewServer(dataStore, ps))
+
+		log.Printf("gRPC server starting on 0.0.0.0:%s", grpcPort)
+		if err := grpcServer.Serve(lis); err != nil {
+			log.Fatalf("Failed to serve gRPC: %v", err)
+		}
+	}()
 
 	// Set up HTTP routes
 	mux := http.NewServeMux()

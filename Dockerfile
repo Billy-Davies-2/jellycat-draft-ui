@@ -31,13 +31,14 @@ COPY --from=builder /app/static ./static
 
 # Environment variables
 ENV PORT=3000 \
+    GRPC_PORT=50051 \
     DB_DRIVER=sqlite \
     SQLITE_FILE=/data/draft.sqlite
 
 # Create data directory for SQLite
 RUN mkdir -p /data
 
-EXPOSE 3000
+EXPOSE 3000 50051
 
 # Run the application
 CMD ["./jellycat-draft"]

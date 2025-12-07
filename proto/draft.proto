@@ -1,0 +1,175 @@
+syntax = "proto3";
+
+package draft;
+
+option go_package = "github.com/Billy-Davies-2/jellycat-draft-ui/proto;draft";
+
+// Draft service provides all draft-related operations
+service DraftService {
+  // Get current draft state
+  rpc GetState(Empty) returns (DraftState);
+  
+  // Draft a player to a team
+  rpc DraftPlayer(DraftPlayerRequest) returns (DraftPlayerResponse);
+  
+  // Reset the draft
+  rpc ResetDraft(Empty) returns (Empty);
+  
+  // Add a new team
+  rpc AddTeam(AddTeamRequest) returns (Team);
+  
+  // List all teams
+  rpc ListTeams(Empty) returns (TeamsResponse);
+  
+  // Reorder teams
+  rpc ReorderTeams(ReorderTeamsRequest) returns (TeamsResponse);
+  
+  // Add a new player
+  rpc AddPlayer(Player) returns (Player);
+  
+  // Set player points
+  rpc SetPlayerPoints(SetPlayerPointsRequest) returns (Player);
+  
+  // Get player profile
+  rpc GetPlayerProfile(GetPlayerProfileRequest) returns (PlayerProfile);
+  
+  // List chat messages
+  rpc ListChat(Empty) returns (ChatResponse);
+  
+  // Send chat message
+  rpc SendChatMessage(SendChatRequest) returns (ChatMessage);
+  
+  // Add reaction to chat message
+  rpc AddReaction(AddReactionRequest) returns (ChatMessage);
+  
+  // Stream events (replaces SSE)
+  rpc StreamEvents(Empty) returns (stream Event);
+}
+
+// Empty message for requests/responses with no data
+message Empty {}
+
+// Player message
+message Player {
+  string id = 1;
+  string name = 2;
+  string position = 3;
+  string team = 4;
+  int32 points = 5;
+  string tier = 6;
+  bool drafted = 7;
+  string drafted_by = 8;
+  string image = 9;
+}
+
+// Team message
+message Team {
+  string id = 1;
+  string name = 2;
+  string owner = 3;
+  string mascot = 4;
+  string color = 5;
+  repeated Player players = 6;
+}
+
+// ChatMessage message
+message ChatMessage {
+  string id = 1;
+  int64 ts = 2;
+  string type = 3;
+  string text = 4;
+  map<string, int32> emotes = 5;
+}
+
+// DraftState message
+message DraftState {
+  repeated Player players = 1;
+  repeated Team teams = 2;
+  repeated ChatMessage chat = 3;
+}
+
+// DraftPlayerRequest message
+message DraftPlayerRequest {
+  string player_id = 1;
+  string team_id = 2;
+}
+
+// DraftPlayerResponse message
+message DraftPlayerResponse {
+  bool success = 1;
+}
+
+// AddTeamRequest message
+message AddTeamRequest {
+  string name = 1;
+  string owner = 2;
+  string mascot = 3;
+  string color = 4;
+}
+
+// TeamsResponse message
+message TeamsResponse {
+  repeated Team teams = 1;
+}
+
+// ReorderTeamsRequest message
+message ReorderTeamsRequest {
+  repeated string order = 1;
+}
+
+// SetPlayerPointsRequest message
+message SetPlayerPointsRequest {
+  string id = 1;
+  int32 points = 2;
+}
+
+// GetPlayerProfileRequest message
+message GetPlayerProfileRequest {
+  string id = 1;
+}
+
+// PlayerProfile message
+message PlayerProfile {
+  string id = 1;
+  string name = 2;
+  string position = 3;
+  string team = 4;
+  int32 points = 5;
+  string tier = 6;
+  bool drafted = 7;
+  string drafted_by = 8;
+  string image = 9;
+  PlayerMetrics metrics = 10;
+}
+
+// PlayerMetrics message
+message PlayerMetrics {
+  int32 consistency = 1;
+  int32 popularity = 2;
+  int32 efficiency = 3;
+  double trend_delta = 4;
+}
+
+// ChatResponse message
+message ChatResponse {
+  repeated ChatMessage messages = 1;
+}
+
+// SendChatRequest message
+message SendChatRequest {
+  string text = 1;
+  string type = 2;
+}
+
+// AddReactionRequest message
+message AddReactionRequest {
+  string message_id = 1;
+  string emote = 2;
+  string user = 3;
+}
+
+// Event message for streaming
+message Event {
+  string type = 1;
+  map<string, string> payload = 2;
+}
