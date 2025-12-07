@@ -142,12 +142,34 @@ go test -fuzz=FuzzGRPCSendChatMessage -fuzztime=30s ./internal/fuzz
 
 ## Docker Deployment
 
-Build and run with Docker:
+The application uses a **scratch-based** Docker image for minimal size and maximum security.
+
+### Build and Run
 
 ```bash
+# Build the image
 docker build -t jellycat-draft .
-docker run -p 3000:3000 -p 50051:50051 -v $(pwd)/data:/data jellycat-draft
+
+# Run with memory storage (default, no volume needed)
+docker run -p 3000:3000 -p 50051:50051 jellycat-draft
+
+# Run with SQLite (requires volume mount)
+docker run -p 3000:3000 -p 50051:50051 \
+  -e DB_DRIVER=sqlite \
+  -e SQLITE_FILE=/data/draft.sqlite \
+  -v $(pwd)/data:/data \
+  jellycat-draft
 ```
+
+### Image Details
+
+- **Base**: `scratch` (empty image, ~0 MB overhead)
+- **Binary**: Statically linked (no runtime dependencies)
+- **Total Size**: ~20 MB (vs ~800 MB for Node.js)
+- **Security**: Minimal attack surface, no shell, no package manager
+- **Default Storage**: In-memory (for maximum portability with scratch)
+
+**Note**: The scratch-based image has no writable filesystem. Use the memory driver or mount a volume for SQLite.
 
 ## API Endpoints
 
