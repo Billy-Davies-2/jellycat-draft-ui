@@ -15,7 +15,6 @@ import (
 	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/dal"
 	grpcserver "github.com/Billy-Davies-2/jellycat-draft-ui/internal/grpc"
 	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/handlers"
-	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/mocks"
 	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/pubsub"
 	pb "github.com/Billy-Davies-2/jellycat-draft-ui/proto"
 	"google.golang.org/grpc"
@@ -364,27 +363,23 @@ func syncCuddlePoints() {
 	}
 }
 
-// convertPubSub converts the generic pubsub interface to *pubsub.PubSub for gRPC server
+// convertPubSub wraps the NATS pubsub to provide a local *pubsub.PubSub for handlers/gRPC
+// This creates a local pubsub that receives events from NATS subscriptions
 func convertPubSub(ps interface {
 	Publish(pubsub.Event)
 	Subscribe() chan pubsub.Event
 	Unsubscribe(chan pubsub.Event)
 }) *pubsub.PubSub {
-	// If it's already a *pubsub.PubSub, return it
-	if p, ok := ps.(*pubsub.PubSub); ok {
-		return p
-	}
-	// If it's a mock, extract the embedded PubSub
-	if m, ok := ps.(*mocks.MockNATSPubSub); ok {
-		return m.PubSub
-	}
-	// Create a wrapper
+	// Create a local wrapper
 	wrapper := pubsub.New()
+	
+	// Subscribe to the NATS pubsub and forward events to local wrapper
 	go func() {
 		ch := ps.Subscribe()
 		for event := range ch {
 			wrapper.Publish(event)
 		}
 	}()
+	
 	return wrapper
 }
