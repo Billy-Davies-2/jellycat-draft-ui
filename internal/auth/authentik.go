@@ -222,6 +222,19 @@ func GetUser(r *http.Request) *User {
 	return user
 }
 
+// IsAdmin checks if the user has admin privileges
+func IsAdmin(user *User) bool {
+	if user == nil {
+		return false
+	}
+	for _, group := range user.Groups {
+		if group == "admins" {
+			return true
+		}
+	}
+	return false
+}
+
 // getUserInfo fetches user information from Authentik
 func (a *AuthentikAuth) getUserInfo(token *oauth2.Token) (*User, error) {
 	userInfoURL := fmt.Sprintf("%s/application/o/userinfo/", a.config.BaseURL)

@@ -39,84 +39,80 @@ var (
 )
 
 func main() {
-	// Determine environment
-	env := os.Getenv("ENVIRONMENT")
-	if env == "" {
-		env = "development"
-	}
-	useMocks := env == "development" || env == "local"
+	log.Println("Starting Jellycat Draft microservice")
 
-	log.Printf("Starting Jellycat Draft microservice (env: %s, mocks: %v)", env, useMocks)
-
-	// Initialize pub/sub (NATS JetStream or mock)
-	if useMocks {
-		ps = mocks.NewMockNATSPubSub()
-	} else {
-		natsURL := os.Getenv("NATS_URL")
-		if natsURL == "" {
-			natsURL = "nats://localhost:4222"
-		}
-		natsSubject := os.Getenv("NATS_SUBJECT")
-		if natsSubject == "" {
-			natsSubject = "draft.events"
-		}
-
-		natsPubSub, err := pubsub.NewNATSPubSub(natsURL, natsSubject)
-		if err != nil {
-			log.Fatalf("Failed to initialize NATS: %v", err)
-		}
-		ps = natsPubSub
-		log.Printf("Connected to NATS at %s", natsURL)
+	// Initialize database driver
+	dbDriver := os.Getenv("DB_DRIVER")
+	if dbDriver == "" {
+		dbDriver = "memory"
 	}
 
-	// Initialize data store (Postgres or mock)
 	var err error
-	if useMocks {
+	switch dbDriver {
+	case "memory":
+		dataStore = dal.NewMemoryDAL()
+		log.Println("Using in-memory data store")
+	case "sqlite":
 		sqliteFile := os.Getenv("SQLITE_FILE")
 		if sqliteFile == "" {
 			sqliteFile = "dev.sqlite"
 		}
-		mockDAL, err := mocks.NewMockPostgresDAL(sqliteFile)
+		dataStore, err = dal.NewSQLiteDAL(sqliteFile)
 		if err != nil {
-			log.Fatalf("Failed to initialize mock Postgres: %v", err)
+			log.Fatalf("Failed to initialize SQLite: %v", err)
 		}
-		dataStore = mockDAL
-	} else {
+		log.Printf("Connected to SQLite database at %s", sqliteFile)
+	case "postgres":
 		dbConnString := os.Getenv("DATABASE_URL")
 		if dbConnString == "" {
-			log.Fatal("DATABASE_URL environment variable is required in production")
+			log.Fatal("DATABASE_URL environment variable is required for postgres driver")
 		}
 		dataStore, err = dal.NewPostgresDAL(dbConnString)
 		if err != nil {
 			log.Fatalf("Failed to initialize Postgres: %v", err)
 		}
 		log.Println("Connected to Postgres database")
+	default:
+		log.Fatalf("Unknown DB_DRIVER: %s (valid: memory, sqlite, postgres)", dbDriver)
 	}
 
-	// Initialize ClickHouse client (or mock)
-	if useMocks {
-		chClient = mocks.NewMockClickHouseClient()
-	} else {
-		chAddr := os.Getenv("CLICKHOUSE_ADDR")
-		if chAddr == "" {
-			chAddr = "localhost:9000"
-		}
-		chDB := os.Getenv("CLICKHOUSE_DB")
-		if chDB == "" {
-			chDB = "default"
-		}
-		chUser := os.Getenv("CLICKHOUSE_USER")
-		if chUser == "" {
-			chUser = "default"
-		}
-		chPass := os.Getenv("CLICKHOUSE_PASSWORD")
-
-		chClient, err = clickhouse.NewClient(chAddr, chDB, chUser, chPass)
-		if err != nil {
-			log.Fatalf("Failed to initialize ClickHouse: %v", err)
-		}
-		log.Printf("Connected to ClickHouse at %s", chAddr)
+	// Initialize pub/sub (NATS JetStream)
+	natsURL := os.Getenv("NATS_URL")
+	if natsURL == "" {
+		natsURL = "nats://localhost:4222"
 	}
+	natsSubject := os.Getenv("NATS_SUBJECT")
+	if natsSubject == "" {
+		natsSubject = "draft.events"
+	}
+
+	natsPubSub, err := pubsub.NewNATSPubSub(natsURL, natsSubject)
+	if err != nil {
+		log.Fatalf("Failed to initialize NATS: %v", err)
+	}
+	ps = natsPubSub
+	log.Printf("Connected to NATS at %s", natsURL)
+
+	// Initialize ClickHouse client
+	chAddr := os.Getenv("CLICKHOUSE_ADDR")
+	if chAddr == "" {
+		chAddr = "localhost:9000"
+	}
+	chDB := os.Getenv("CLICKHOUSE_DB")
+	if chDB == "" {
+		chDB = "default"
+	}
+	chUser := os.Getenv("CLICKHOUSE_USER")
+	if chUser == "" {
+		chUser = "default"
+	}
+	chPass := os.Getenv("CLICKHOUSE_PASSWORD")
+
+	chClient, err = clickhouse.NewClient(chAddr, chDB, chUser, chPass)
+	if err != nil {
+		log.Fatalf("Failed to initialize ClickHouse: %v", err)
+	}
+	log.Printf("Connected to ClickHouse at %s", chAddr)
 
 	// Start periodic cuddle points sync (every 5 minutes)
 	go func() {
@@ -131,33 +127,28 @@ func main() {
 		}
 	}()
 
-	// Initialize authentication (Authentik or mock)
-	if useMocks {
-		authProvider = auth.NewMockAuth()
-		log.Println("Using MOCK authentication for local development")
-	} else {
-		authentikBaseURL := os.Getenv("AUTHENTIK_BASE_URL")
-		authentikClientID := os.Getenv("AUTHENTIK_CLIENT_ID")
-		authentikClientSecret := os.Getenv("AUTHENTIK_CLIENT_SECRET")
-		authentikRedirectURL := os.Getenv("AUTHENTIK_REDIRECT_URL")
+	// Initialize authentication (Authentik OAuth2)
+	authentikBaseURL := os.Getenv("AUTHENTIK_BASE_URL")
+	authentikClientID := os.Getenv("AUTHENTIK_CLIENT_ID")
+	authentikClientSecret := os.Getenv("AUTHENTIK_CLIENT_SECRET")
+	authentikRedirectURL := os.Getenv("AUTHENTIK_REDIRECT_URL")
 
-		if authentikBaseURL == "" || authentikClientID == "" || authentikClientSecret == "" {
-			log.Fatal("AUTHENTIK_BASE_URL, AUTHENTIK_CLIENT_ID, and AUTHENTIK_CLIENT_SECRET are required in production")
-		}
-
-		if authentikRedirectURL == "" {
-			authentikRedirectURL = "http://localhost:3000/auth/callback"
-		}
-
-		authProvider = auth.NewAuthentikAuth(&auth.AuthentikConfig{
-			BaseURL:      authentikBaseURL,
-			ClientID:     authentikClientID,
-			ClientSecret: authentikClientSecret,
-			RedirectURL:  authentikRedirectURL,
-			Scopes:       []string{"openid", "profile", "email"},
-		})
-		log.Printf("Connected to Authentik at %s", authentikBaseURL)
+	if authentikBaseURL == "" || authentikClientID == "" || authentikClientSecret == "" {
+		log.Fatal("AUTHENTIK_BASE_URL, AUTHENTIK_CLIENT_ID, and AUTHENTIK_CLIENT_SECRET environment variables are required")
 	}
+
+	if authentikRedirectURL == "" {
+		authentikRedirectURL = "http://localhost:3000/auth/callback"
+	}
+
+	authProvider = auth.NewAuthentikAuth(&auth.AuthentikConfig{
+		BaseURL:      authentikBaseURL,
+		ClientID:     authentikClientID,
+		ClientSecret: authentikClientSecret,
+		RedirectURL:  authentikRedirectURL,
+		Scopes:       []string{"openid", "profile", "email"},
+	})
+	log.Printf("Connected to Authentik at %s", authentikBaseURL)
 
 	// Load templates
 	var tmplErr error
@@ -263,9 +254,11 @@ func startHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	user := auth.GetUser(r)
 	data := map[string]interface{}{
-		"Teams": state.Teams,
-		"User":  auth.GetUser(r),
+		"Teams":   state.Teams,
+		"User":    user,
+		"IsAdmin": auth.IsAdmin(user),
 	}
 
 	// Parse both base and content templates
@@ -287,11 +280,13 @@ func draftHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	user := auth.GetUser(r)
 	data := map[string]interface{}{
 		"Players": state.Players,
 		"Teams":   state.Teams,
 		"Chat":    state.Chat,
-		"User":    auth.GetUser(r),
+		"User":    user,
+		"IsAdmin": auth.IsAdmin(user),
 	}
 
 	tmpl, err := template.ParseFiles("templates/base.html", "templates/draft.html")
@@ -306,6 +301,19 @@ func draftHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func adminHandler(w http.ResponseWriter, r *http.Request) {
+	// Get user from context
+	user := auth.GetUser(r)
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Check if user is an admin
+	if !auth.IsAdmin(user) {
+		http.Error(w, "Forbidden: Admin access required", http.StatusForbidden)
+		return
+	}
+
 	state, err := dataStore.GetState()
 	if err != nil {
 		http.Error(w, "Failed to load state", http.StatusInternalServerError)
@@ -315,7 +323,8 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 	data := map[string]interface{}{
 		"Players": state.Players,
 		"Teams":   state.Teams,
-		"User":    auth.GetUser(r),
+		"User":    user,
+		"IsAdmin": true,
 	}
 
 	tmpl, err := template.ParseFiles("templates/base.html", "templates/admin.html")
