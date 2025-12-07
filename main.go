@@ -10,6 +10,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/auth"
 	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/clickhouse"
 	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/dal"
 	grpcserver "github.com/Billy-Davies-2/jellycat-draft-ui/internal/grpc"
@@ -21,9 +22,10 @@ import (
 )
 
 var (
-	templates *template.Template
-	dataStore dal.DraftDAL
-	ps        interface {
+	templates    *template.Template
+	dataStore    dal.DraftDAL
+	authProvider auth.AuthProvider
+	ps           interface {
 		Publish(pubsub.Event)
 		Subscribe() chan pubsub.Event
 		Unsubscribe(chan pubsub.Event)
@@ -129,6 +131,34 @@ func main() {
 		}
 	}()
 
+	// Initialize authentication (Authentik or mock)
+	if useMocks {
+		authProvider = auth.NewMockAuth()
+		log.Println("Using MOCK authentication for local development")
+	} else {
+		authentikBaseURL := os.Getenv("AUTHENTIK_BASE_URL")
+		authentikClientID := os.Getenv("AUTHENTIK_CLIENT_ID")
+		authentikClientSecret := os.Getenv("AUTHENTIK_CLIENT_SECRET")
+		authentikRedirectURL := os.Getenv("AUTHENTIK_REDIRECT_URL")
+
+		if authentikBaseURL == "" || authentikClientID == "" || authentikClientSecret == "" {
+			log.Fatal("AUTHENTIK_BASE_URL, AUTHENTIK_CLIENT_ID, and AUTHENTIK_CLIENT_SECRET are required in production")
+		}
+
+		if authentikRedirectURL == "" {
+			authentikRedirectURL = "http://localhost:3000/auth/callback"
+		}
+
+		authProvider = auth.NewAuthentikAuth(&auth.AuthentikConfig{
+			BaseURL:      authentikBaseURL,
+			ClientID:     authentikClientID,
+			ClientSecret: authentikClientSecret,
+			RedirectURL:  authentikRedirectURL,
+			Scopes:       []string{"openid", "profile", "email"},
+		})
+		log.Printf("Connected to Authentik at %s", authentikBaseURL)
+	}
+
 	// Load templates
 	var tmplErr error
 	templates, tmplErr = template.ParseGlob("templates/*.html")
@@ -165,11 +195,16 @@ func main() {
 	fs := http.FileServer(http.Dir("static"))
 	mux.Handle("/static/", http.StripPrefix("/static/", fs))
 
-	// Page routes
+	// Auth routes (public)
+	mux.HandleFunc("/auth/login", authProvider.LoginHandler)
+	mux.HandleFunc("/auth/callback", authProvider.CallbackHandler)
+	mux.HandleFunc("/auth/logout", authProvider.LogoutHandler)
+
+	// Page routes (protected)
 	mux.HandleFunc("/", homeHandler)
-	mux.HandleFunc("/start", startHandler)
-	mux.HandleFunc("/draft", draftHandler)
-	mux.HandleFunc("/admin", adminHandler)
+	mux.HandleFunc("/start", authProvider.Middleware(startHandler))
+	mux.HandleFunc("/draft", authProvider.Middleware(draftHandler))
+	mux.HandleFunc("/admin", authProvider.Middleware(adminHandler))
 
 	// API routes
 	api := handlers.NewAPIHandlers(dataStore, convertPubSub(ps))
@@ -230,6 +265,7 @@ func startHandler(w http.ResponseWriter, r *http.Request) {
 
 	data := map[string]interface{}{
 		"Teams": state.Teams,
+		"User":  auth.GetUser(r),
 	}
 
 	// Parse both base and content templates
@@ -255,6 +291,7 @@ func draftHandler(w http.ResponseWriter, r *http.Request) {
 		"Players": state.Players,
 		"Teams":   state.Teams,
 		"Chat":    state.Chat,
+		"User":    auth.GetUser(r),
 	}
 
 	tmpl, err := template.ParseFiles("templates/base.html", "templates/draft.html")
@@ -278,6 +315,7 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 	data := map[string]interface{}{
 		"Players": state.Players,
 		"Teams":   state.Teams,
+		"User":    auth.GetUser(r),
 	}
 
 	tmpl, err := template.ParseFiles("templates/base.html", "templates/admin.html")

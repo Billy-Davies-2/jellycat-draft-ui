@@ -1,16 +1,20 @@
 # Jellycat Fantasy Draft
 
-A realtime fantasy draft application for Jellycat plush toys, built with **Go**, **htmx**, **gRPC**, and **TailwindCSS**.
+A realtime fantasy draft application for Jellycat plush toys, built with **Go**, **htmx**, **Alpine.js**, **gRPC**, **TailwindCSS**, and **Authentik authentication**.
 
 ## Stack
 
-- **Backend**: Go 1.24+ with dual interface:
+- **Backend**: Go 1.25+ with dual interface:
   - HTTP/REST server for SSR pages and htmx frontend  
   - gRPC server for programmatic API access
-- **Frontend**: htmx for dynamic interactions, Server-Sent Events (SSE) for realtime updates
+- **Frontend**: 
+  - htmx for server-side HTML updates and dynamic interactions
+  - Alpine.js for enriched client-side reactivity (search, filtering, UI state)
+  - Server-Sent Events (SSE) for realtime updates
+- **Authentication**: Authentik OAuth2/OIDC (production) with mock auth (development)
 - **Styling**: TailwindCSS for modern, responsive design
 - **Templates**: Go's html/template for server-side rendering
-- **Data**: Pluggable DAL supporting memory and SQLite storage
+- **Data**: Pluggable DAL supporting memory, SQLite, and PostgreSQL
 - **API**: Protocol Buffers with gRPC streaming for events
 
 ## Features
@@ -19,10 +23,13 @@ A realtime fantasy draft application for Jellycat plush toys, built with **Go**,
 - 👥 Team creation and management
 - 💬 Live chat with emoji reactions
 - 📊 Real-time updates via SSE (HTTP) and gRPC streaming
+- 🔐 Secure authentication via Authentik OAuth2/OIDC
 - 🎨 Beautiful UI with TailwindCSS
-- 🔄 Multiple storage backends (memory, SQLite)
+- ⚡ Alpine.js for reactive client-side interactions (search, filters, notifications)
+- 🔄 Multiple storage backends (memory, SQLite, PostgreSQL)
 - 🔌 Dual API: HTTP/REST + gRPC
 - 🧪 Comprehensive fuzz testing for both interfaces
+- 🐳 Production-ready with mock services for local development
 
 ## Quick Start
 

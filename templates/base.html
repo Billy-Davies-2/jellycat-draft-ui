@@ -5,10 +5,33 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Jellycat Fantasy Draft</title>
     <link href="/static/css/styles.css" rel="stylesheet">
+    <!-- htmx for dynamic HTML updates -->
     <script src="https://unpkg.com/htmx.org@1.9.10" integrity="sha384-D1Kt99CQMDuVetoL1lrYwg5t+9QdHe7NLX/SoJYkXDFfX37iInKRy5xLSi8nO7UC" crossorigin="anonymous"></script>
     <script src="https://unpkg.com/htmx.org@1.9.10/dist/ext/sse.js" integrity="sha384-JXOvQYm0HjCfIZ3Y3nKLu2lTMFfKPh7DQz0oj8p4w/pBBJsUkFhGZVPbLlDzTqQQ" crossorigin="anonymous"></script>
+    <!-- Alpine.js for reactive client-side interactions -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js" integrity="sha384-LJQ3YeL7n9b1I0x5y7h1HiFkr3F7vW0bFfvvJfvRF9e9E2F2IfFdKf4thCK0mYGp" crossorigin="anonymous"></script>
 </head>
 <body class="bg-gradient-to-br from-pink-50 via-purple-50 to-blue-50 min-h-screen">
+    <!-- User info bar (if authenticated) -->
+    {{ if .User }}
+    <div class="bg-white border-b border-gray-200 px-4 py-2 flex justify-between items-center" x-data="{ showMenu: false }">
+        <div class="flex items-center space-x-4">
+            <span class="text-sm text-gray-600">Welcome, <strong>{{ .User.Name }}</strong></span>
+        </div>
+        <div class="relative">
+            <button @click="showMenu = !showMenu" class="flex items-center space-x-2 text-sm text-gray-700 hover:text-gray-900">
+                <span>{{ .User.Username }}</span>
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+            </button>
+            <div x-show="showMenu" @click.away="showMenu = false" class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
+                <a href="/auth/logout" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Logout</a>
+            </div>
+        </div>
+    </div>
+    {{ end }}
+    
     {{ template "content" . }}
     <script>
         // Connect to SSE for realtime updates

@@ -1,5 +1,6 @@
 {{ define "content" }}
-<div class="min-h-screen" hx-ext="sse" sse-connect="/api/events" sse-swap="sse-event" hx-trigger="sse-event from:body" hx-get="/api/draft/state" hx-target="#draft-content" hx-swap="none">
+<div class="min-h-screen" hx-ext="sse" sse-connect="/api/events" sse-swap="sse-event" hx-trigger="sse-event from:body" hx-get="/api/draft/state" hx-target="#draft-content" hx-swap="none"
+     x-data="draftApp()" x-init="init()">
     <!-- Header -->
     <div class="bg-white border-b-2 border-pink-200 shadow-sm">
         <div class="container mx-auto px-4 py-4">
@@ -11,6 +12,20 @@
                     </h1>
                 </div>
                 <div class="flex items-center gap-6">
+                    <!-- Alpine.js: Filter controls -->
+                    <div class="flex items-center gap-2">
+                        <input type="text" x-model="search" @input="filterPlayers" 
+                               placeholder="Search Jellycats..." 
+                               class="px-3 py-1 text-sm border-2 border-pink-200 rounded-lg focus:border-pink-400 focus:outline-none">
+                        <select x-model="filterPosition" @change="filterPlayers"
+                                class="px-3 py-1 text-sm border-2 border-pink-200 rounded-lg focus:border-pink-400 focus:outline-none">
+                            <option value="">All Positions</option>
+                            <option value="CC">CC - Cuddle Companion</option>
+                            <option value="SS">SS - Snuggle Specialist</option>
+                            <option value="HH">HH - Hug Hero</option>
+                            <option value="DD">DD - Dream Defender</option>
+                        </select>
+                    </div>
                     <div class="flex items-center gap-2">
                         <svg class="w-5 h-5 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -306,5 +321,81 @@ function updateAvailableCount() {
 }
 
 document.addEventListener('DOMContentLoaded', updateAvailableCount);
+
+// Alpine.js: Draft app component with reactive state
+function draftApp() {
+    return {
+        search: '',
+        filterPosition: '',
+        filterTier: '',
+        notification: null,
+        
+        init() {
+            // Listen for SSE events and show notifications
+            document.addEventListener('htmx:afterSwap', () => {
+                this.showNotification('Draft updated!', 'success');
+            });
+        },
+        
+        filterPlayers() {
+            const players = document.querySelectorAll('#players-grid > div');
+            let visibleCount = 0;
+            
+            players.forEach(player => {
+                const playerCard = player;
+                const name = playerCard.textContent.toLowerCase();
+                const matchesSearch = this.search === '' || name.includes(this.search.toLowerCase());
+                
+                // Get position from the player card
+                const positionEl = playerCard.querySelector('.px-2.py-1.rounded.text-xs.font-medium.border');
+                const position = positionEl ? positionEl.textContent.trim() : '';
+                const matchesPosition = this.filterPosition === '' || position === this.filterPosition;
+                
+                if (matchesSearch && matchesPosition) {
+                    playerCard.style.display = '';
+                    visibleCount++;
+                } else {
+                    playerCard.style.display = 'none';
+                }
+            });
+            
+            // Update counter
+            const counter = document.getElementById('available-count');
+            if (counter) {
+                counter.textContent = visibleCount;
+            }
+        },
+        
+        showNotification(message, type = 'info') {
+            this.notification = { message, type };
+            setTimeout(() => {
+                this.notification = null;
+            }, 3000);
+        },
+        
+        resetFilters() {
+            this.search = '';
+            this.filterPosition = '';
+            this.filterTier = '';
+            this.filterPlayers();
+        }
+    };
+}
+</script>
+
+<!-- Alpine.js: Notification component -->
+<div x-data="draftApp()" x-show="notification" x-transition
+     class="fixed top-4 right-4 z-50 max-w-sm"
+     style="display: none;">
+    <div :class="{
+        'bg-green-100 border-green-400 text-green-700': notification && notification.type === 'success',
+        'bg-blue-100 border-blue-400 text-blue-700': notification && notification.type === 'info',
+        'bg-red-100 border-red-400 text-red-700': notification && notification.type === 'error'
+    }" 
+    class="border px-4 py-3 rounded-lg shadow-lg">
+        <p x-text="notification ? notification.message : ''"></p>
+    </div>
+</div>
+
 </script>
 {{ end }}
