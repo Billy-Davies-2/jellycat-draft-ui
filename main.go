@@ -54,7 +54,12 @@ func main() {
 	log.Printf("Using DB driver: %s", dbDriver)
 
 	// Load templates
-	templates = template.Must(template.ParseGlob("templates/*.html"))
+	var tmplErr error
+	templates, tmplErr = template.ParseGlob("templates/*.html")
+	if tmplErr != nil {
+		log.Fatalf("Failed to parse templates: %v", tmplErr)
+	}
+	log.Printf("Templates loaded successfully")
 
 	// Set up HTTP routes
 	mux := http.NewServeMux()
@@ -130,7 +135,14 @@ func startHandler(w http.ResponseWriter, r *http.Request) {
 		"Teams": state.Teams,
 	}
 
-	if err := templates.ExecuteTemplate(w, "start.html", data); err != nil {
+	// Parse both base and content templates
+	tmpl, err := template.ParseFiles("templates/base.html", "templates/start.html")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err := tmpl.ExecuteTemplate(w, "base.html", data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -148,7 +160,13 @@ func draftHandler(w http.ResponseWriter, r *http.Request) {
 		"Chat":    state.Chat,
 	}
 
-	if err := templates.ExecuteTemplate(w, "draft.html", data); err != nil {
+	tmpl, err := template.ParseFiles("templates/base.html", "templates/draft.html")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err := tmpl.ExecuteTemplate(w, "base.html", data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -165,7 +183,13 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 		"Teams":   state.Teams,
 	}
 
-	if err := templates.ExecuteTemplate(w, "admin.html", data); err != nil {
+	tmpl, err := template.ParseFiles("templates/base.html", "templates/admin.html")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err := tmpl.ExecuteTemplate(w, "base.html", data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }

@@ -25,4 +25,6 @@ pnpm-lock.yaml
 
 # typescript
 *.tsbuildinfo
-next-env.d.ts
+next-env.d.tsjellycat-draft
+*.sqlite
+tailwindcss-linux-x64
