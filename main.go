@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"html/template"
 	"log"
@@ -9,9 +10,11 @@ import (
 	"os"
 	"time"
 
+	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/clickhouse"
 	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/dal"
 	grpcserver "github.com/Billy-Davies-2/jellycat-draft-ui/internal/grpc"
 	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/handlers"
+	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/mocks"
 	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/pubsub"
 	pb "github.com/Billy-Davies-2/jellycat-draft-ui/proto"
 	"google.golang.org/grpc"
@@ -20,42 +23,111 @@ import (
 var (
 	templates *template.Template
 	dataStore dal.DraftDAL
-	ps        *pubsub.PubSub
+	ps        interface {
+		Publish(pubsub.Event)
+		Subscribe() chan pubsub.Event
+		Unsubscribe(chan pubsub.Event)
+	}
+	chClient interface {
+		GetCuddlePoints(string) (int, error)
+		GetAllCuddlePoints() (map[string]int, error)
+		SyncCuddlePoints(func(string, int) error) error
+		Close() error
+	}
 )
 
 func main() {
-	// Initialize pubsub
-	ps = pubsub.New()
+	// Determine environment
+	env := os.Getenv("ENVIRONMENT")
+	if env == "" {
+		env = "development"
+	}
+	useMocks := env == "development" || env == "local"
 
-	// Initialize data store based on DB_DRIVER env var
-	dbDriver := os.Getenv("DB_DRIVER")
-	if dbDriver == "" {
-		if os.Getenv("NODE_ENV") == "development" {
-			dbDriver = "sqlite"
-		} else {
-			dbDriver = "memory"
+	log.Printf("Starting Jellycat Draft microservice (env: %s, mocks: %v)", env, useMocks)
+
+	// Initialize pub/sub (NATS JetStream or mock)
+	if useMocks {
+		ps = mocks.NewMockNATSPubSub()
+	} else {
+		natsURL := os.Getenv("NATS_URL")
+		if natsURL == "" {
+			natsURL = "nats://localhost:4222"
 		}
+		natsSubject := os.Getenv("NATS_SUBJECT")
+		if natsSubject == "" {
+			natsSubject = "draft.events"
+		}
+
+		natsPubSub, err := pubsub.NewNATSPubSub(natsURL, natsSubject)
+		if err != nil {
+			log.Fatalf("Failed to initialize NATS: %v", err)
+		}
+		ps = natsPubSub
+		log.Printf("Connected to NATS at %s", natsURL)
 	}
 
+	// Initialize data store (Postgres or mock)
 	var err error
-	switch dbDriver {
-	case "sqlite":
+	if useMocks {
 		sqliteFile := os.Getenv("SQLITE_FILE")
 		if sqliteFile == "" {
 			sqliteFile = "dev.sqlite"
 		}
-		dataStore, err = dal.NewSQLiteDAL(sqliteFile)
+		mockDAL, err := mocks.NewMockPostgresDAL(sqliteFile)
 		if err != nil {
-			log.Fatalf("Failed to initialize SQLite: %v", err)
+			log.Fatalf("Failed to initialize mock Postgres: %v", err)
 		}
-	case "memory":
-		dataStore = dal.NewMemoryDAL()
-	default:
-		log.Printf("Unknown DB_DRIVER '%s', falling back to memory", dbDriver)
-		dataStore = dal.NewMemoryDAL()
+		dataStore = mockDAL
+	} else {
+		dbConnString := os.Getenv("DATABASE_URL")
+		if dbConnString == "" {
+			log.Fatal("DATABASE_URL environment variable is required in production")
+		}
+		dataStore, err = dal.NewPostgresDAL(dbConnString)
+		if err != nil {
+			log.Fatalf("Failed to initialize Postgres: %v", err)
+		}
+		log.Println("Connected to Postgres database")
 	}
 
-	log.Printf("Using DB driver: %s", dbDriver)
+	// Initialize ClickHouse client (or mock)
+	if useMocks {
+		chClient = mocks.NewMockClickHouseClient()
+	} else {
+		chAddr := os.Getenv("CLICKHOUSE_ADDR")
+		if chAddr == "" {
+			chAddr = "localhost:9000"
+		}
+		chDB := os.Getenv("CLICKHOUSE_DB")
+		if chDB == "" {
+			chDB = "default"
+		}
+		chUser := os.Getenv("CLICKHOUSE_USER")
+		if chUser == "" {
+			chUser = "default"
+		}
+		chPass := os.Getenv("CLICKHOUSE_PASSWORD")
+
+		chClient, err = clickhouse.NewClient(chAddr, chDB, chUser, chPass)
+		if err != nil {
+			log.Fatalf("Failed to initialize ClickHouse: %v", err)
+		}
+		log.Printf("Connected to ClickHouse at %s", chAddr)
+	}
+
+	// Start periodic cuddle points sync (every 5 minutes)
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+
+		// Initial sync
+		syncCuddlePoints()
+
+		for range ticker.C {
+			syncCuddlePoints()
+		}
+	}()
 
 	// Load templates
 	var tmplErr error
@@ -78,7 +150,7 @@ func main() {
 		}
 
 		grpcServer := grpc.NewServer()
-		pb.RegisterDraftServiceServer(grpcServer, grpcserver.NewServer(dataStore, ps))
+		pb.RegisterDraftServiceServer(grpcServer, grpcserver.NewServer(dataStore, convertPubSub(ps)))
 
 		log.Printf("gRPC server starting on 0.0.0.0:%s", grpcPort)
 		if err := grpcServer.Serve(lis); err != nil {
@@ -100,7 +172,7 @@ func main() {
 	mux.HandleFunc("/admin", adminHandler)
 
 	// API routes
-	api := handlers.NewAPIHandlers(dataStore, ps)
+	api := handlers.NewAPIHandlers(dataStore, convertPubSub(ps))
 	
 	// Draft API
 	mux.HandleFunc("/api/draft/state", api.GetDraftState)
@@ -226,4 +298,46 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+}
+
+// syncCuddlePoints syncs cuddle points from ClickHouse
+func syncCuddlePoints() {
+	log.Println("Syncing cuddle points from ClickHouse...")
+	ctx := context.Background()
+	_ = ctx // Context ready for future use
+
+	err := chClient.SyncCuddlePoints(func(playerID string, points int) error {
+		_, err := dataStore.SetPlayerPoints(playerID, points)
+		return err
+	})
+	if err != nil {
+		log.Printf("Failed to sync cuddle points: %v", err)
+	} else {
+		log.Println("Cuddle points synced successfully")
+	}
+}
+
+// convertPubSub converts the generic pubsub interface to *pubsub.PubSub for gRPC server
+func convertPubSub(ps interface {
+	Publish(pubsub.Event)
+	Subscribe() chan pubsub.Event
+	Unsubscribe(chan pubsub.Event)
+}) *pubsub.PubSub {
+	// If it's already a *pubsub.PubSub, return it
+	if p, ok := ps.(*pubsub.PubSub); ok {
+		return p
+	}
+	// If it's a mock, extract the embedded PubSub
+	if m, ok := ps.(*mocks.MockNATSPubSub); ok {
+		return m.PubSub
+	}
+	// Create a wrapper
+	wrapper := pubsub.New()
+	go func() {
+		ch := ps.Subscribe()
+		for event := range ch {
+			wrapper.Publish(event)
+		}
+	}()
+	return wrapper
 }
