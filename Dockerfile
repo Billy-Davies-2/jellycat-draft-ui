@@ -1,49 +1,47 @@
 # syntax=docker/dockerfile:1
 
-# Multi-stage Bun + Next.js Dockerfile (standalone output)
+# Multi-stage Dockerfile for Go application
 
-FROM oven/bun:1.2 AS builder
+FROM golang:1.24-alpine AS builder
 WORKDIR /app
 
-# Only copy the manifests first for better layer caching
-COPY package.json ./
-# If you have a bun.lock or bun.lockb, copy it for reproducible installs
-COPY bun.lock ./
-COPY bun.lockb* ./
+# Update CA certificates and install build dependencies for static compilation
+RUN apk update && apk add --no-cache gcc musl-dev sqlite-dev
 
-# Toolchain for native modules needed by node-gyp (e.g., better-sqlite3)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 make g++ \
-    && rm -rf /var/lib/apt/lists/*
+# Copy go mod files
+COPY go.mod go.sum ./
+RUN go mod download
 
-# Install only production deps (exclude dev)
-ENV NODE_ENV=production
-# Install all dependencies in the builder (dev + prod) so Next.js has types/tools to build.
-# Final image stays slim since we only copy the standalone output.
-RUN CI=0 BUN_INSTALL_FROZEN_LOCKFILE=0 bun install --no-progress --ignore-scripts
-
-# Copy the rest of the source
+# Copy source code
 COPY . .
 
-ENV NEXT_TELEMETRY_DISABLED=1
+# Build the application as a static binary
+# Note: We link statically against musl and sqlite
+RUN CGO_ENABLED=1 GOOS=linux go build \
+    -a \
+    -ldflags '-linkmode external -extldflags "-static"' \
+    -tags netgo,osusergo \
+    -o jellycat-draft main.go
 
-# Build Next.js app (standalone)
-RUN bun run build
-
-
-FROM oven/bun:1.2 AS runner
+FROM scratch
 WORKDIR /app
-ENV NODE_ENV=production \
-    NEXT_TELEMETRY_DISABLED=1 \
-    PORT=3000 \
-    HOSTNAME=0.0.0.0
 
-# Copy standalone server and static assets
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public
+# Copy CA certificates for HTTPS
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
-EXPOSE 3000
+# Copy binary and static files from builder
+COPY --from=builder /app/jellycat-draft .
+COPY --from=builder /app/templates ./templates
+COPY --from=builder /app/static ./static
 
-# Start the standalone server with Bun's Node-compatible runtime
-CMD ["bun", "server.js"]
+# Environment variables
+# Note: Using memory driver by default since scratch has no writable filesystem
+# For SQLite, mount a volume at runtime
+ENV PORT=3000 \
+    GRPC_PORT=50051 \
+    DB_DRIVER=memory
+
+EXPOSE 3000 50051
+
+# Run the application
+CMD ["./jellycat-draft"]
