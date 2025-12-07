@@ -1,77 +1,142 @@
 # Jellycat Fantasy Draft
 
-Feature-rich Next.js (App Router) + Bun + tRPC application demonstrating a realtime fantasy draft with multi-backend data abstraction.
+A realtime fantasy draft application for Jellycat plush toys, built with **Go**, **htmx**, and **TailwindCSS**.
 
 ## Stack
 
-- Next.js 15 / React 19 / TypeScript 5
-- Bun runtime & test runner
-- tRPC v11 (HTTP + WebSocket subscriptions in dev)
-- Tailwind + shadcn/ui components
-- Pluggable DAL: memory, SQLite (dev default), Postgres, ClickHouse, ClickHouse mock
+- **Backend**: Go 1.24+ with standard library HTTP server
+- **Frontend**: htmx for dynamic interactions, Server-Sent Events (SSE) for realtime updates
+- **Styling**: TailwindCSS for modern, responsive design
+- **Templates**: Go's html/template
+- **Data**: Pluggable DAL supporting memory and SQLite storage
 
-## Data Access Drivers
+## Features
 
-Set `DB_DRIVER` to select:
+- 🧸 Draft cute Jellycat plush toys in a fantasy draft format
+- 👥 Team creation and management
+- 💬 Live chat with emoji reactions
+- 📊 Real-time updates via Server-Sent Events
+- 🎨 Beautiful UI with TailwindCSS
+- 🔄 Multiple storage backends (memory, SQLite)
 
-- `sqlite` (default in dev) – stored in `dev.sqlite` (override with `SQLITE_FILE`)
-- `memory` – ephemeral in-memory store
-- `postgres` – uses `DATABASE_URL`
-- `clickhouse` – merges points from real ClickHouse
-- `clickhouse-mock` – simulates ClickHouse layer over SQLite
+## Quick Start
 
-## Realtime
+### Prerequisites
 
-- WebSocket server (dev) at `ws://localhost:3001` (override `TRPC_WS_PORT`)
-- Subscription: `events` channel; UI refetches queries on event receipt.
+- Go 1.24 or higher
+- (Optional) TailwindCSS CLI for stylesheet changes
 
-## Development
+### Development
 
-```
-bun install
-bun run dev
-```
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/Billy-Davies-2/jellycat-draft-ui.git
+   cd jellycat-draft-ui
+   ```
 
-SQLite file auto-created & seeded.
+2. **Build the application**
+   ```bash
+   go build -o jellycat-draft main.go
+   ```
 
-## Testing
+3. **Run the server**
+   ```bash
+   # Using in-memory storage
+   DB_DRIVER=memory ./jellycat-draft
 
-```
-bun test
-```
+   # Using SQLite (default for dev)
+   DB_DRIVER=sqlite SQLITE_FILE=draft.db ./jellycat-draft
+   ```
 
-Includes unit tests for store, DALs, tRPC routers, pubsub, health, and Postgres/ClickHouse behaviors.
+4. **Open your browser**
+   ```
+   http://localhost:3000
+   ```
 
 ## Environment Variables
 
-| Name                    | Purpose                                                           |
-| ----------------------- | ----------------------------------------------------------------- |
-| DB_DRIVER               | Select driver (sqlite/memory/postgres/clickhouse/clickhouse-mock) |
-| SQLITE_FILE             | SQLite filename (default dev.sqlite)                              |
-| DATABASE_URL            | Postgres connection string                                        |
-| CLICKHOUSE_URL          | ClickHouse endpoint                                               |
-| CLICKHOUSE_POINTS_QUERY | Override points query                                             |
-| CLICKHOUSE_POINTS_TABLE | Overrides table for manual point updates                          |
-| TRPC_WS_PORT            | Dev WebSocket port (default 3001)                                 |
+| Variable     | Description                           | Default      |
+|--------------|---------------------------------------|--------------|
+| `PORT`       | Server port                           | `3000`       |
+| `DB_DRIVER`  | Database driver (`memory`, `sqlite`)  | `memory`     |
+| `SQLITE_FILE`| SQLite database file path             | `dev.sqlite` |
 
-## Adding a New Driver
+## Project Structure
 
-1. Create `lib/dal/<driver>.ts` implementing `IDraftDAL`.
-2. Register in `getDAL()` and extend healthcheck logic if needed.
-3. Add unit tests mocking underlying client.
+```
+.
+├── main.go                 # Application entry point
+├── internal/
+│   ├── dal/               # Data Access Layer
+│   │   ├── types.go       # DAL interface
+│   │   ├── memory.go      # In-memory implementation
+│   │   └── sqlite.go      # SQLite implementation
+│   ├── handlers/          # HTTP handlers
+│   ├── models/            # Data models
+│   └── pubsub/            # Pub/sub for realtime events
+├── templates/             # HTML templates
+│   ├── base.html         # Base layout
+│   ├── start.html        # Team creation page
+│   ├── draft.html        # Main draft page
+│   └── admin.html        # Admin panel
+└── static/               # Static assets
+    ├── css/              # Stylesheets
+    └── images/           # Jellycat images
+```
 
-## Scripts
+## Docker Deployment
 
-| Script | Description             |
-| ------ | ----------------------- |
-| dev    | Next dev with Bun       |
-| build  | Build standalone output |
-| start  | Run built app           |
-| test   | Run full test suite     |
+Build and run with Docker:
 
-## Deployment
+```bash
+docker build -t jellycat-draft .
+docker run -p 3000:3000 -v $(pwd)/data:/data jellycat-draft
+```
 
-`next build` outputs a standalone build. Provide production env vars for Postgres/ClickHouse at runtime.
+## API Endpoints
+
+### Draft Operations
+- `GET /api/draft/state` - Get current draft state
+- `POST /api/draft/pick` - Draft a player
+- `POST /api/draft/reset` - Reset the draft
+
+### Team Operations
+- `GET /api/teams` - List all teams
+- `POST /api/teams/add` - Create a new team
+- `POST /api/teams/reorder` - Reorder teams
+
+### Player Operations
+- `POST /api/players/add` - Add a new player
+- `POST /api/players/points` - Update player points
+- `GET /api/players/profile` - Get player profile
+
+### Chat Operations
+- `GET /api/chat/list` - Get all chat messages
+- `POST /api/chat/send` - Send a chat message
+- `POST /api/chat/react` - Add a reaction to a message
+
+### Realtime
+- `GET /api/events` - Server-Sent Events stream for live updates
+
+## Rebuilding Styles
+
+If you modify TailwindCSS styles:
+
+```bash
+# Download TailwindCSS CLI (one time)
+curl -sLO https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64
+chmod +x tailwindcss-linux-x64
+
+# Rebuild styles
+./tailwindcss-linux-x64 -c tailwind.config.go.js -i static/css/input.css -o static/css/styles.css --minify
+```
+
+## Adding New Data Drivers
+
+1. Create a new file in `internal/dal/` (e.g., `postgres.go`)
+2. Implement the `DraftDAL` interface defined in `internal/dal/types.go`
+3. Register the driver in `main.go`'s switch statement
+4. Set `DB_DRIVER` environment variable to use it
 
 ## License
 

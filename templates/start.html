@@ -77,10 +77,12 @@
         if (evt.detail.target.id === 'team-created') {
             const response = JSON.parse(evt.detail.xhr.response);
             if (response && response.id) {
-                // Store owner in localStorage
+                // Store owner in localStorage (sanitized)
                 const owner = document.getElementById('owner').value;
                 if (owner) {
-                    localStorage.setItem('jellycat_owner', owner);
+                    // Basic sanitization - remove any HTML tags and limit length
+                    const sanitized = owner.replace(/<[^>]*>/g, '').substring(0, 100);
+                    localStorage.setItem('jellycat_owner', sanitized);
                 }
                 // Small delay before redirect
                 setTimeout(() => window.location.href = '/draft', 100);

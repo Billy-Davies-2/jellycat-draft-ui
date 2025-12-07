@@ -273,19 +273,11 @@ function selectPlayer(id, name, image, team, position, points) {
 function draftPlayer() {
     if (!selectedPlayer) return;
     
-    // Get teams from page data
-    const teamElements = document.querySelectorAll('[data-team-id]');
-    if (teamElements.length === 0) {
-        // Fallback: use first team from rendered data
-        const teams = {{ range .Teams }}"{{ .ID }}",{{ end }};
-        if (teams.length > 0) {
-            submitDraft(teams[currentTeamIndex % teams.length]);
-        }
-        return;
+    // Use hardcoded teams from template data
+    const teams = [{{ range $i, $t := .Teams }}{{ if $i }},{{ end }}"{{ $t.ID }}"{{ end }}];
+    if (teams.length > 0) {
+        submitDraft(teams[currentTeamIndex % teams.length]);
     }
-    
-    const teamId = teamElements[currentTeamIndex % teamElements.length].getAttribute('data-team-id');
-    submitDraft(teamId);
 }
 
 function submitDraft(teamId) {
@@ -300,8 +292,8 @@ function submitDraft(teamId) {
         if (response.ok) {
             selectedPlayer = null;
             currentTeamIndex++;
-            // Reload page to show updated state
-            setTimeout(() => window.location.reload(), 500);
+            // SSE will trigger automatic refresh via htmx
+            // No manual reload needed
         }
     });
 }
