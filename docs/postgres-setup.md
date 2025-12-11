@@ -122,12 +122,12 @@ Cuddle points are dynamically adjusted based on when a player is drafted:
 **Mid Picks (7-12):** No adjustment (cuddle points remain unchanged)
 
 **Late Picks (13-18):** Lose cuddle points
-- Pick #13: -5 points
-- Pick #14: -6 points
-- Pick #15: -7 points
-- Pick #16: -8 points
-- Pick #17: -9 points
-- Pick #18: -10 points (50 → 40)
+- Pick #13: -5 points (8 - 13)
+- Pick #14: -6 points (8 - 14)
+- Pick #15: -7 points (8 - 15)
+- Pick #16: -8 points (8 - 16)
+- Pick #17: -9 points (8 - 17)
+- Pick #18: -10 points (8 - 18) (50 → 40)
 
 **Bounds:** Cuddle points are constrained to a minimum of 10 and maximum of 100.
 

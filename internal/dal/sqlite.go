@@ -413,7 +413,7 @@ func (s *SQLiteDAL) DraftPlayer(playerID, teamID string) error {
 		cuddlePointsAdjustment = 20 - (draftPickNumber * 2)
 	} else if draftPickNumber >= 13 {
 		// Late picks lose 5-10 points (pick 13 loses -5, pick 18 loses -10)
-		cuddlePointsAdjustment = 13 - draftPickNumber
+		cuddlePointsAdjustment = 8 - draftPickNumber
 	}
 	
 	newCuddlePoints := p.CuddlePoints + cuddlePointsAdjustment

@@ -74,6 +74,11 @@ func (m *MemoryDAL) AddPlayer(player *models.Player) (*models.Player, error) {
 		player.ID = genID("player")
 	}
 
+	// Assign random cuddle points if not already set
+	if player.CuddlePoints == 0 {
+		player.CuddlePoints = randomCuddlePoints()
+	}
+
 	m.players = append(m.players, *player)
 	return player, nil
 }
@@ -161,8 +166,32 @@ func (m *MemoryDAL) DraftPlayer(playerID, teamID string) error {
 		return fmt.Errorf("player already drafted")
 	}
 
+	// Calculate current draft pick number
+	draftPickNumber := 0
+	for _, t := range m.teams {
+		draftPickNumber += len(t.Players)
+	}
+	draftPickNumber += 1
+
+	// Calculate cuddle points adjustment based on draft position
+	cuddlePointsAdjustment := 0
+	if draftPickNumber <= 6 {
+		cuddlePointsAdjustment = 20 - (draftPickNumber * 2)
+	} else if draftPickNumber >= 13 {
+		cuddlePointsAdjustment = 8 - draftPickNumber
+	}
+	
+	newCuddlePoints := player.CuddlePoints + cuddlePointsAdjustment
+	if newCuddlePoints < 10 {
+		newCuddlePoints = 10
+	}
+	if newCuddlePoints > 100 {
+		newCuddlePoints = 100
+	}
+
 	player.Drafted = true
 	player.DraftedBy = team.Name
+	player.CuddlePoints = newCuddlePoints
 	team.Players = append(team.Players, *player)
 
 	// Add system message
