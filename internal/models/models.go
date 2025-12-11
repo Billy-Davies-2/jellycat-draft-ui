@@ -12,15 +12,16 @@ const (
 
 // Player represents a Jellycat player
 type Player struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Position  string `json:"position"`
-	Team      string `json:"team"`
-	Points    int    `json:"points"`
-	Tier      Tier   `json:"tier"`
-	Drafted   bool   `json:"drafted"`
-	DraftedBy string `json:"draftedBy,omitempty"`
-	Image     string `json:"image"`
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Position     string `json:"position"`
+	Team         string `json:"team"`
+	Points       int    `json:"points"`
+	CuddlePoints int    `json:"cuddlePoints"`
+	Tier         Tier   `json:"tier"`
+	Drafted      bool   `json:"drafted"`
+	DraftedBy    string `json:"draftedBy,omitempty"`
+	Image        string `json:"image"`
 }
 
 // Team represents a draft team

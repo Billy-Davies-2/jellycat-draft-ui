@@ -90,6 +90,7 @@ CREATE INDEX IF NOT EXISTS idx_players_drafted ON players(drafted);
 - `position`: Player position (CC, SS, HH, CH)
 - `team`: Jellycat team/collection (e.g., "Woodland", "Safari")
 - `points`: Cuddle points (synced from ClickHouse analytics)
+- `cuddle_points`: Dynamic cuddle points that adjust based on draft position (default: 50)
 - `tier`: Performance tier (S, A, B, C)
 - `drafted`: Whether the player has been drafted
 - `drafted_by`: Name of the team that drafted this player
@@ -97,6 +98,46 @@ CREATE INDEX IF NOT EXISTS idx_players_drafted ON players(drafted);
 - `image_data`: Binary image data (BYTEA)
 - `created_at`: Record creation timestamp
 - `updated_at`: Last update timestamp
+
+### Cuddle Points System
+
+The `cuddle_points` column implements a dynamic scoring system that rewards strategic draft decisions:
+
+#### Default Behavior
+- New player entries receive a default cuddle points value of **50**
+- When admins add new players via the API, cuddle points are automatically assigned a random value between **25 and 79** (inclusive)
+- This randomization uses cryptographically secure random number generation for thread safety
+
+#### Draft-Based Adjustments
+Cuddle points are dynamically adjusted based on when a player is drafted:
+
+**Early Picks (1-6):** Gain bonus cuddle points
+- Pick #1: +18 points (50 → 68)
+- Pick #2: +16 points
+- Pick #3: +14 points
+- Pick #4: +12 points
+- Pick #5: +10 points
+- Pick #6: +8 points
+
+**Mid Picks (7-12):** No adjustment (cuddle points remain unchanged)
+
+**Late Picks (13-18):** Lose cuddle points
+- Pick #13: -5 points
+- Pick #14: -6 points
+- Pick #15: -7 points
+- Pick #16: -8 points
+- Pick #17: -9 points
+- Pick #18: -10 points (50 → 40)
+
+**Bounds:** Cuddle points are constrained to a minimum of 10 and maximum of 100.
+
+**Example:**
+```
+Player starts with 50 cuddle points
+Drafted as pick #1 → 50 + 18 = 68 cuddle points
+Drafted as pick #18 → 50 - 10 = 40 cuddle points
+```
+
 
 #### 2. `teams` Table
 
@@ -129,6 +170,7 @@ CREATE TABLE IF NOT EXISTS team_players (
     team_id TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
     player_id TEXT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
     player_data JSONB NOT NULL,
+    draft_pick_number INTEGER,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (team_id, player_id)
 );
@@ -138,6 +180,7 @@ CREATE TABLE IF NOT EXISTS team_players (
 - `team_id`: Reference to teams table
 - `player_id`: Reference to players table
 - `player_data`: Full player data snapshot (JSONB) at time of draft
+- `draft_pick_number`: The sequential order in which this player was drafted (used for cuddle points calculation)
 - `created_at`: When the player was drafted
 
 #### 4. `chat` Table
