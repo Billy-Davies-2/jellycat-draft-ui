@@ -41,8 +41,8 @@ A realtime fantasy draft application for Jellycat plush toys, built with **Go**,
 
 - Go 1.24 or higher
 - PostgreSQL database (or use memory/SQLite for development)
-- NATS server with JetStream
-- ClickHouse server
+- NATS server with JetStream (optional - mock is used in development)
+- ClickHouse server (optional - mock is used in development)
 - Authentik OAuth2 provider
 - (Optional) Protocol Buffers compiler for regenerating proto files
 - (Optional) TailwindCSS CLI for stylesheet changes
@@ -71,11 +71,15 @@ A realtime fantasy draft application for Jellycat plush toys, built with **Go**,
    export DB_DRIVER=postgres                                  # PostgreSQL (production)
    export DATABASE_URL="postgres://user:pass@localhost/draft"
    
-   # NATS JetStream
+   # Environment mode (optional - defaults to development)
+   export ENVIRONMENT=development  # Uses mock NATS and mock ClickHouse
+   export ENVIRONMENT=production   # Requires real NATS and ClickHouse
+   
+   # NATS JetStream (only required in production mode)
    export NATS_URL="nats://localhost:4222"
    export NATS_SUBJECT="draft.events"
    
-   # ClickHouse
+   # ClickHouse (only required in production mode)
    export CLICKHOUSE_ADDR="localhost:9000"
    export CLICKHOUSE_DB="default"
    export CLICKHOUSE_USER="default"
@@ -92,10 +96,18 @@ A realtime fantasy draft application for Jellycat plush toys, built with **Go**,
    ```bash
    ./jellycat-draft
    ```
+   
+   In development mode (default), the application automatically uses:
+   - **Mock NATS**: In-memory pub/sub simulation (no NATS server needed)
+   - **Mock ClickHouse**: Static cuddle points data
+   - **SQLite or Memory**: Lightweight database options
 
 5. **Access the application**
    - HTTP UI: `http://localhost:3000`
    - gRPC API: `localhost:50051`
+   - Health check: `http://localhost:3000/api/health`
+   - Liveness probe: `http://localhost:3000/healthz`
+   - Readiness probe: `http://localhost:3000/readyz`
 
 ## Role-Based Access Control
 

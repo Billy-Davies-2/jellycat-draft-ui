@@ -75,7 +75,7 @@ func main() {
 		log.Fatalf("Unknown DB_DRIVER: %s (valid: memory, sqlite, postgres)", dbDriver)
 	}
 
-	// Initialize pub/sub (NATS JetStream)
+	// Initialize pub/sub (NATS JetStream or Mock for local development)
 	natsURL := os.Getenv("NATS_URL")
 	if natsURL == "" {
 		natsURL = "nats://localhost:4222"
@@ -85,12 +85,32 @@ func main() {
 		natsSubject = "draft.events"
 	}
 
-	natsPubSub, err := pubsub.NewNATSPubSub(natsURL, natsSubject)
-	if err != nil {
-		log.Fatalf("Failed to initialize NATS: %v", err)
+	environment := os.Getenv("ENVIRONMENT")
+	var natsPubSub interface {
+		Publish(pubsub.Event)
+		Subscribe() chan pubsub.Event
+		Unsubscribe(chan pubsub.Event)
 	}
+
+	// Use mock NATS in development mode, real NATS in production
+	if environment == "" || environment == "development" {
+		log.Println("Using mock NATS pub/sub for local development (no NATS server required)")
+		mockNats, err := pubsub.NewMockNATSPubSub(natsURL, natsSubject)
+		if err != nil {
+			log.Fatalf("Failed to initialize mock NATS: %v", err)
+		}
+		natsPubSub = mockNats
+	} else {
+		log.Println("Using real NATS JetStream for production")
+		realNats, err := pubsub.NewNATSPubSub(natsURL, natsSubject)
+		if err != nil {
+			log.Fatalf("Failed to initialize NATS: %v", err)
+		}
+		natsPubSub = realNats
+		log.Printf("Connected to NATS at %s", natsURL)
+	}
+	
 	ps = natsPubSub
-	log.Printf("Connected to NATS at %s", natsURL)
 
 	// Initialize ClickHouse client
 	chAddr := os.Getenv("CLICKHOUSE_ADDR")
