@@ -52,6 +52,7 @@ func (p *PostgresDAL) initSchema() error {
 		drafted BOOLEAN NOT NULL DEFAULT false,
 		drafted_by TEXT,
 		image TEXT,
+		image_data BYTEA,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);
@@ -129,6 +130,12 @@ func (p *PostgresDAL) seedData() error {
 		if err != nil {
 			return err
 		}
+	}
+
+	// Migrate images from static/images directory to database
+	if err := p.MigrateImagesToDatabase(); err != nil {
+		// Log warning but don't fail - images are optional
+		fmt.Printf("Warning: Failed to migrate images to database: %v\n", err)
 	}
 
 	// Add welcome messages

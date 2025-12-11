@@ -46,7 +46,7 @@ func (m *MockClickHouseClient) GetCuddlePoints(jellycatID string) (int, error) {
 	}
 
 	// Add some randomness for realism (±10%)
-	variance := rand.Intn(int(float64(base) * 0.2)) - int(float64(base)*0.1)
+	variance := rand.Intn(int(float64(base)*0.2)) - int(float64(base)*0.1)
 	return base + variance, nil
 }
 
@@ -54,7 +54,7 @@ func (m *MockClickHouseClient) GetCuddlePoints(jellycatID string) (int, error) {
 func (m *MockClickHouseClient) GetAllCuddlePoints() (map[string]int, error) {
 	result := make(map[string]int)
 	for id, base := range m.basePoints {
-		variance := rand.Intn(int(float64(base) * 0.2)) - int(float64(base)*0.1)
+		variance := rand.Intn(int(float64(base)*0.2)) - int(float64(base)*0.1)
 		result[id] = base + variance
 	}
 	return result, nil

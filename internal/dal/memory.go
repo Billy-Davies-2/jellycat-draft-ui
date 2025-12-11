@@ -12,11 +12,11 @@ import (
 
 // MemoryDAL implements DraftDAL using in-memory storage
 type MemoryDAL struct {
-	mu             sync.RWMutex
-	players        []models.Player
-	teams          []models.Team
-	chat           []models.ChatMessage
-	reactionUsers  map[string]map[string]map[string]bool // messageID -> emote -> userID -> bool
+	mu            sync.RWMutex
+	players       []models.Player
+	teams         []models.Team
+	chat          []models.ChatMessage
+	reactionUsers map[string]map[string]map[string]bool // messageID -> emote -> userID -> bool
 }
 
 // NewMemoryDAL creates a new in-memory data access layer
@@ -27,12 +27,12 @@ func NewMemoryDAL() *MemoryDAL {
 		chat:          []models.ChatMessage{},
 		reactionUsers: make(map[string]map[string]map[string]bool),
 	}
-	
+
 	// Add welcome messages
 	dal.AddChatMessage("Welcome to the Jellycat Draft! 🎉", "system")
 	dal.AddChatMessage("Tip: Click a Jellycat card to draft it!", "system")
 	dal.AddChatMessage("Who will snag Bashful Bunny first? 🐰", "system")
-	
+
 	return dal
 }
 
@@ -280,24 +280,24 @@ func genID(prefix string) string {
 
 func getDefaultPlayers() []models.Player {
 	return []models.Player{
-		{ID: "1", Name: "Bashful Bunny", Position: "CC", Team: "Woodland", Points: 324, Tier: models.TierS, Drafted: false, Image: "/static/images/bashful-bunny.png"},
-		{ID: "2", Name: "Fuddlewuddle Lion", Position: "SS", Team: "Safari", Points: 298, Tier: models.TierS, Drafted: false, Image: "/static/images/fuddlewuddle-lion.png"},
-		{ID: "3", Name: "Cordy Roy Elephant", Position: "HH", Team: "Safari", Points: 287, Tier: models.TierS, Drafted: false, Image: "/static/images/cordy-roy-elephant.png"},
-		{ID: "4", Name: "Blossom Tulip Bunny", Position: "CH", Team: "Garden", Points: 251, Tier: models.TierA, Drafted: false, Image: "/static/images/blossom-tulip-bunny.png"},
-		{ID: "5", Name: "Amuseable Avocado", Position: "CC", Team: "Kitchen", Points: 312, Tier: models.TierS, Drafted: false, Image: "/static/images/amuseable-avocado.png"},
-		{ID: "6", Name: "Octopus Ollie", Position: "SS", Team: "Ocean", Points: 276, Tier: models.TierA, Drafted: false, Image: "/static/images/octopus-ollie.png"},
-		{ID: "7", Name: "Jellycat Dragon", Position: "HH", Team: "Fantasy", Points: 268, Tier: models.TierA, Drafted: false, Image: "/static/images/jellycat-dragon.png"},
-		{ID: "8", Name: "Bashful Lamb", Position: "CH", Team: "Farm", Points: 245, Tier: models.TierA, Drafted: false, Image: "/static/images/bashful-lamb.png"},
-		{ID: "9", Name: "Amuseable Pineapple", Position: "CC", Team: "Tropical", Points: 289, Tier: models.TierS, Drafted: false, Image: "/static/images/amuseable-pineapple.png"},
-		{ID: "10", Name: "Cordy Roy Fox", Position: "SS", Team: "Woodland", Points: 234, Tier: models.TierA, Drafted: false, Image: "/static/images/cordy-roy-fox.png"},
-		{ID: "11", Name: "Blossom Peach Bunny", Position: "HH", Team: "Garden", Points: 256, Tier: models.TierA, Drafted: false, Image: "/static/images/blossom-peach-bunny.png"},
-		{ID: "12", Name: "Amuseable Taco", Position: "CH", Team: "Kitchen", Points: 267, Tier: models.TierA, Drafted: false, Image: "/static/images/amuseable-taco.png"},
-		{ID: "13", Name: "Bashful Unicorn", Position: "CC", Team: "Fantasy", Points: 278, Tier: models.TierA, Drafted: false, Image: "/static/images/bashful-unicorn.png"},
-		{ID: "14", Name: "Jellycat Penguin", Position: "SS", Team: "Arctic", Points: 243, Tier: models.TierB, Drafted: false, Image: "/static/images/jellycat-penguin.png"},
-		{ID: "15", Name: "Amuseable Moon", Position: "HH", Team: "Space", Points: 229, Tier: models.TierB, Drafted: false, Image: "/static/images/amuseable-moon.png"},
-		{ID: "16", Name: "Cordy Roy Pig", Position: "CH", Team: "Farm", Points: 241, Tier: models.TierB, Drafted: false, Image: "/static/images/cordy-roy-pig.png"},
-		{ID: "17", Name: "Bashful Tiger", Position: "SS", Team: "Safari", Points: 235, Tier: models.TierB, Drafted: false, Image: "/static/images/bashful-tiger.png"},
-		{ID: "18", Name: "Amuseable Donut", Position: "CC", Team: "Kitchen", Points: 228, Tier: models.TierB, Drafted: false, Image: "/static/images/amuseable-donut.png"},
+		{ID: "1", Name: "Bashful Bunny", Position: "CC", Team: "Woodland", Points: 324, Tier: models.TierS, Drafted: false, Image: "/images/bashful-bunny.png"},
+		{ID: "2", Name: "Fuddlewuddle Lion", Position: "SS", Team: "Safari", Points: 298, Tier: models.TierS, Drafted: false, Image: "/images/fuddlewuddle-lion.png"},
+		{ID: "3", Name: "Cordy Roy Elephant", Position: "HH", Team: "Safari", Points: 287, Tier: models.TierS, Drafted: false, Image: "/images/cordy-roy-elephant.png"},
+		{ID: "4", Name: "Blossom Tulip Bunny", Position: "CH", Team: "Garden", Points: 251, Tier: models.TierA, Drafted: false, Image: "/images/blossom-tulip-bunny.png"},
+		{ID: "5", Name: "Amuseable Avocado", Position: "CC", Team: "Kitchen", Points: 312, Tier: models.TierS, Drafted: false, Image: "/images/amuseable-avocado.png"},
+		{ID: "6", Name: "Octopus Ollie", Position: "SS", Team: "Ocean", Points: 276, Tier: models.TierA, Drafted: false, Image: "/images/octopus-ollie.png"},
+		{ID: "7", Name: "Jellycat Dragon", Position: "HH", Team: "Fantasy", Points: 268, Tier: models.TierA, Drafted: false, Image: "/images/jellycat-dragon.png"},
+		{ID: "8", Name: "Bashful Lamb", Position: "CH", Team: "Farm", Points: 245, Tier: models.TierA, Drafted: false, Image: "/images/bashful-lamb.png"},
+		{ID: "9", Name: "Amuseable Pineapple", Position: "CC", Team: "Tropical", Points: 289, Tier: models.TierS, Drafted: false, Image: "/images/amuseable-pineapple.png"},
+		{ID: "10", Name: "Cordy Roy Fox", Position: "SS", Team: "Woodland", Points: 234, Tier: models.TierA, Drafted: false, Image: "/images/cordy-roy-fox.png"},
+		{ID: "11", Name: "Blossom Peach Bunny", Position: "HH", Team: "Garden", Points: 256, Tier: models.TierA, Drafted: false, Image: "/images/blossom-peach-bunny.png"},
+		{ID: "12", Name: "Amuseable Taco", Position: "CH", Team: "Kitchen", Points: 267, Tier: models.TierA, Drafted: false, Image: "/images/amuseable-taco.png"},
+		{ID: "13", Name: "Bashful Unicorn", Position: "CC", Team: "Fantasy", Points: 278, Tier: models.TierA, Drafted: false, Image: "/images/bashful-unicorn.png"},
+		{ID: "14", Name: "Jellycat Penguin", Position: "SS", Team: "Arctic", Points: 243, Tier: models.TierB, Drafted: false, Image: "/images/jellycat-penguin.png"},
+		{ID: "15", Name: "Amuseable Moon", Position: "HH", Team: "Space", Points: 229, Tier: models.TierB, Drafted: false, Image: "/images/amuseable-moon.png"},
+		{ID: "16", Name: "Cordy Roy Pig", Position: "CH", Team: "Farm", Points: 241, Tier: models.TierB, Drafted: false, Image: "/images/cordy-roy-pig.png"},
+		{ID: "17", Name: "Bashful Tiger", Position: "SS", Team: "Safari", Points: 235, Tier: models.TierB, Drafted: false, Image: "/images/bashful-tiger.png"},
+		{ID: "18", Name: "Amuseable Donut", Position: "CC", Team: "Kitchen", Points: 228, Tier: models.TierB, Drafted: false, Image: "/images/amuseable-donut.png"},
 	}
 }
 

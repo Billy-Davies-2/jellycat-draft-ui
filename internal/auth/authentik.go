@@ -77,7 +77,7 @@ func NewAuthentikAuth(config *AuthentikConfig) *AuthentikAuth {
 func (a *AuthentikAuth) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	// Generate state for CSRF protection
 	state := generateState()
-	
+
 	// Store state in cookie
 	http.SetCookie(w, &http.Cookie{
 		Name:     "oauth_state",
