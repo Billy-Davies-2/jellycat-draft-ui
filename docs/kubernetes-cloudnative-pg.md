@@ -938,6 +938,20 @@ kubectl edit cluster jellycat-postgres -n jellycat-draft
 
 ## Quick Reference
 
+### CloudNativePG kubectl Plugin (Optional)
+
+The CloudNativePG kubectl plugin provides convenient commands for managing clusters. Install it with:
+
+```bash
+# Install via krew
+kubectl krew install cnpg
+
+# Or download from GitHub releases
+curl -sSfL \
+  https://github.com/cloudnative-pg/cloudnative-pg/raw/main/hack/install-kubectl-cnpg-plugin.sh | \
+  sudo sh -s -- -b /usr/local/bin
+```
+
 ### Common Commands
 
 ```bash
@@ -956,17 +970,23 @@ kubectl exec -it jellycat-postgres-1 -n jellycat-draft -- psql -U jellycatuser j
 # View logs
 kubectl logs -n jellycat-draft jellycat-postgres-1 -f
 
-# Create backup
+# Create backup (requires kubectl-cnpg plugin OR use kubectl create -f backup.yaml)
 kubectl cnpg backup jellycat-postgres -n jellycat-draft
+# Alternative without plugin:
+# kubectl create -f backup-manifest.yaml
 
 # List backups
 kubectl get backups -n jellycat-draft
 
-# Promote replica to primary (failover)
+# Promote replica to primary (requires kubectl-cnpg plugin OR manually patch the cluster)
 kubectl cnpg promote jellycat-postgres-2 -n jellycat-draft
+# Alternative without plugin:
+# kubectl patch cluster jellycat-postgres -n jellycat-draft --type merge \
+#   -p '{"spec":{"primaryUpdateStrategy":"unsupervised","primaryUpdateMethod":"switchover"}}'
 
-# Scale cluster
-kubectl cnpg scale jellycat-postgres -n jellycat-draft --replicas 5
+# Scale cluster (standard kubectl command)
+kubectl patch cluster jellycat-postgres -n jellycat-draft --type merge \
+  -p '{"spec":{"instances":5}}'
 ```
 
 ### Environment Variables for Application
