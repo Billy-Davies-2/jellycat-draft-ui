@@ -5,6 +5,7 @@ This guide provides detailed instructions for deploying the Jellycat Fantasy Dra
 ## Table of Contents
 
 - [Overview](#overview)
+- [PostgreSQL Optimizations](#postgresql-optimizations)
 - [Prerequisites](#prerequisites)
 - [Installing CloudNativePG Operator](#installing-cloudnativepg-operator)
 - [Creating a PostgreSQL Cluster](#creating-a-postgresql-cluster)
@@ -27,6 +28,29 @@ This guide provides detailed instructions for deploying the Jellycat Fantasy Dra
 - **Day-2 Operations**: Rolling updates, scaling, and maintenance
 
 This application is fully compatible with CloudNativePG and requires PostgreSQL 12 or higher.
+
+## PostgreSQL Optimizations
+
+The application includes several CloudNativePG-specific optimizations:
+
+### Connection Pool Configuration
+- **MaxOpenConns: 25** - Prevents connection exhaustion (CloudNativePG default max_connections is 100)
+- **MaxIdleConns: 5** - Maintains ready connections for quick reuse
+- **ConnMaxLifetime: 5 minutes** - Gracefully handles failovers by recycling connections
+- **ConnMaxIdleTime: 1 minute** - Reduces load by closing idle connections
+
+### Query Optimizations
+- **Eliminated N+1 Queries**: Teams and players are fetched using a single JOIN query
+- **Batch Inserts**: Seed data uses prepared statements and transactions
+- **Context Timeouts**: All operations include context timeouts for failover handling
+- **Strategic Indexes**: Added indexes for common query patterns (points DESC, created_at, etc.)
+
+### Transaction Improvements
+- **Combined Queries**: DraftPlayer uses CTEs to reduce round trips
+- **Batch Operations**: Seed operations use transactions with prepared statements
+- **Failover Handling**: Context timeouts ensure operations complete or fail quickly
+
+These optimizations significantly improve performance, especially with CloudNativePG's high-availability features and read replicas.
 
 ## Prerequisites
 
