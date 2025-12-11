@@ -409,7 +409,7 @@ func (s *SQLiteDAL) DraftPlayer(playerID, teamID string) error {
 	// Early picks (1-6) gain points, late picks (13-18) lose points
 	cuddlePointsAdjustment := 0
 	if draftPickNumber <= 6 {
-		// Early picks gain 10-15 points (pick 1 gets +15, pick 6 gets +10)
+		// Early picks gain 8-18 points (pick 1 gets +18, pick 6 gets +8)
 		cuddlePointsAdjustment = 20 - (draftPickNumber * 2)
 	} else if draftPickNumber >= 13 {
 		// Late picks lose 5-10 points (pick 13 loses -5, pick 18 loses -10)

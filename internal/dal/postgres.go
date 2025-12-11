@@ -1,41 +1,15 @@
 package dal
 
 import (
-	"crypto/rand"
 	"database/sql"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"math/big"
-	"sync"
 	"time"
 
 	_ "github.com/lib/pq"
 
 	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/models"
 )
-
-var (
-	// Thread-safe random number generator for cuddle points
-	rngMutex sync.Mutex
-)
-
-// randomCuddlePoints generates a random cuddle points value between 25 and 79 (inclusive)
-// using crypto/rand for thread safety
-func randomCuddlePoints() int {
-	// Generate a random number between 0 and 54 (79-25=54)
-	n, err := rand.Int(rand.Reader, big.NewInt(55))
-	if err != nil {
-		// Fallback to a simpler method if crypto/rand fails
-		rngMutex.Lock()
-		defer rngMutex.Unlock()
-		var b [8]byte
-		rand.Read(b[:])
-		val := binary.LittleEndian.Uint64(b[:])
-		return int(val%55) + 25
-	}
-	return int(n.Int64()) + 25
-}
 
 // PostgresDAL implements DraftDAL using PostgreSQL
 type PostgresDAL struct {
@@ -394,7 +368,7 @@ func (p *PostgresDAL) DraftPlayer(playerID, teamID string) error {
 	// Early picks (1-6) gain points, late picks (13-18) lose points
 	cuddlePointsAdjustment := 0
 	if draftPickNumber <= 6 {
-		// Early picks gain 10-15 points (pick 1 gets +15, pick 6 gets +10)
+		// Early picks gain 8-18 points (pick 1 gets +18, pick 6 gets +8)
 		cuddlePointsAdjustment = 20 - (draftPickNumber * 2)
 	} else if draftPickNumber >= 13 {
 		// Late picks lose 5-10 points (pick 13 loses -5, pick 18 loses -10)
