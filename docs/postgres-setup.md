@@ -383,11 +383,20 @@ export DATABASE_URL="postgres://jellycatuser:securepassword@localhost:5432/jelly
 # - Start serving on port 3000
 ```
 
+## Kubernetes Deployment
+
+For deploying PostgreSQL on Kubernetes using the CloudNativePG operator, see:
+
+- **[Kubernetes with CloudNativePG Guide](kubernetes-cloudnative-pg.md)** - Comprehensive guide for deploying on Kubernetes with CloudNativePG operator
+
+The application is fully compatible with CloudNativePG (PostgreSQL 12-17) with no code changes required.
+
 ## Additional Resources
 
 - [PostgreSQL Documentation](https://www.postgresql.org/docs/)
 - [Go pq Driver Documentation](https://pkg.go.dev/github.com/lib/pq)
 - [Jellycat Draft README](../README.md)
+- [Kubernetes CloudNativePG Guide](kubernetes-cloudnative-pg.md)
 
 ## Support
 

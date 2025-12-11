@@ -231,11 +231,13 @@ go test -fuzz=FuzzGRPCAddTeam -fuzztime=30s ./internal/fuzz
 go test -fuzz=FuzzGRPCSendChatMessage -fuzztime=30s ./internal/fuzz
 ```
 
-## Docker Deployment
+## Deployment
+
+### Docker Deployment
 
 The application uses a **scratch-based** Docker image for minimal size and maximum security.
 
-### Build and Run
+#### Build and Run
 
 ```bash
 # Build the image
@@ -252,7 +254,7 @@ docker run -p 3000:3000 -p 50051:50051 \
   jellycat-draft
 ```
 
-### Image Details
+#### Image Details
 
 - **Base**: `scratch` (empty image, ~0 MB overhead)
 - **Binary**: Statically linked (no runtime dependencies)
@@ -261,6 +263,14 @@ docker run -p 3000:3000 -p 50051:50051 \
 - **Default Storage**: In-memory (for maximum portability with scratch)
 
 **Note**: The scratch-based image has no writable filesystem. Use the memory driver or mount a volume for SQLite.
+
+### Kubernetes Deployment
+
+For production Kubernetes deployments with PostgreSQL using the CloudNativePG operator:
+
+- **[Kubernetes CloudNativePG Guide](docs/kubernetes-cloudnative-pg.md)** - Complete guide for deploying on Kubernetes with high availability PostgreSQL
+
+The application is fully compatible with CloudNativePG (PostgreSQL 12-17) without any code modifications.
 
 ## API Endpoints
 
