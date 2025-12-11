@@ -89,7 +89,7 @@ func (s *SQLiteDAL) initSchema() error {
 		FROM pragma_table_info('players') 
 		WHERE name='cuddle_points'
 	`).Scan(&cuddlePointsExists)
-	
+
 	if err == nil && cuddlePointsExists == 0 {
 		_, err = s.db.Exec(`ALTER TABLE players ADD COLUMN cuddle_points INTEGER NOT NULL DEFAULT 50`)
 		if err != nil {
@@ -104,7 +104,7 @@ func (s *SQLiteDAL) initSchema() error {
 		FROM pragma_table_info('team_players') 
 		WHERE name='draft_pick_number'
 	`).Scan(&draftPickNumberExists)
-	
+
 	if err == nil && draftPickNumberExists == 0 {
 		_, err = s.db.Exec(`ALTER TABLE team_players ADD COLUMN draft_pick_number INTEGER`)
 		if err != nil {
@@ -415,7 +415,7 @@ func (s *SQLiteDAL) DraftPlayer(playerID, teamID string) error {
 		// Late picks lose 5-10 points (pick 13 loses -5, pick 18 loses -10)
 		cuddlePointsAdjustment = 8 - draftPickNumber
 	}
-	
+
 	newCuddlePoints := p.CuddlePoints + cuddlePointsAdjustment
 	// Ensure cuddle points stay within reasonable bounds (min 10, max 100)
 	if newCuddlePoints < 10 {
@@ -438,7 +438,7 @@ func (s *SQLiteDAL) DraftPlayer(playerID, teamID string) error {
 	p.DraftedBy = teamName
 	p.CuddlePoints = newCuddlePoints
 	playerJSON, _ := json.Marshal(p)
-	
+
 	// Add player to team with draft pick number
 	_, err = tx.Exec(`
 		INSERT INTO team_players (team_id, player_id, player_data, draft_pick_number)

@@ -180,7 +180,7 @@ func (m *MemoryDAL) DraftPlayer(playerID, teamID string) error {
 	} else if draftPickNumber >= 13 {
 		cuddlePointsAdjustment = 8 - draftPickNumber
 	}
-	
+
 	newCuddlePoints := player.CuddlePoints + cuddlePointsAdjustment
 	if newCuddlePoints < 10 {
 		newCuddlePoints = 10

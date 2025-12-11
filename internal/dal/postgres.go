@@ -374,7 +374,7 @@ func (p *PostgresDAL) DraftPlayer(playerID, teamID string) error {
 		// Late picks lose 5-10 points (pick 13 loses -5, pick 18 loses -10)
 		cuddlePointsAdjustment = 8 - draftPickNumber
 	}
-	
+
 	newCuddlePoints := player.CuddlePoints + cuddlePointsAdjustment
 	// Ensure cuddle points stay within reasonable bounds (min 10, max 100)
 	if newCuddlePoints < 10 {
@@ -399,7 +399,7 @@ func (p *PostgresDAL) DraftPlayer(playerID, teamID string) error {
 	player.DraftedBy = teamName
 	player.CuddlePoints = newCuddlePoints
 	playerJSON, _ := json.Marshal(player)
-	
+
 	// Add player to team with draft pick number
 	_, err = tx.Exec(`
 		INSERT INTO team_players (team_id, player_id, player_data, draft_pick_number)
