@@ -237,7 +237,7 @@ func (p *PostgresDAL) GetState() (*models.DraftState, error) {
 
 	for teamRows.Next() {
 		var teamID, teamName, teamOwner, teamMascot, teamColor string
-		var playerJSON []byte
+		var playerJSON sql.NullString
 		
 		err := teamRows.Scan(&teamID, &teamName, &teamOwner, &teamMascot, &teamColor, &playerJSON)
 		if err != nil {
@@ -258,9 +258,9 @@ func (p *PostgresDAL) GetState() (*models.DraftState, error) {
 		}
 
 		// Add player if player_data is not null (from LEFT JOIN)
-		if len(playerJSON) > 0 {
+		if playerJSON.Valid && playerJSON.String != "" {
 			var player models.Player
-			if err := json.Unmarshal(playerJSON, &player); err != nil {
+			if err := json.Unmarshal([]byte(playerJSON.String), &player); err != nil {
 				return nil, err
 			}
 			teamsMap[teamID].Players = append(teamsMap[teamID].Players, player)
@@ -378,18 +378,15 @@ func (p *PostgresDAL) DraftPlayer(playerID, teamID string) error {
 	var player models.Player
 	var teamName, teamMascot string
 	
+	// Use CROSS JOIN with explicit condition to ensure single row result
 	err = tx.QueryRowContext(ctx, `
-		WITH player_data AS (
-			SELECT id, name, position, team, points, tier, drafted, image
-			FROM players WHERE id = $1 FOR UPDATE
-		),
-		team_data AS (
-			SELECT name, mascot FROM teams WHERE id = $2
-		)
 		SELECT 
 			p.id, p.name, p.position, p.team, p.points, p.tier, p.drafted, p.image,
 			t.name, t.mascot
-		FROM player_data p, team_data t
+		FROM players p
+		CROSS JOIN teams t
+		WHERE p.id = $1 AND t.id = $2
+		FOR UPDATE OF p
 	`, playerID, teamID).Scan(
 		&player.ID, &player.Name, &player.Position, &player.Team, 
 		&player.Points, &player.Tier, &player.Drafted, &player.Image,
