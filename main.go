@@ -109,42 +109,53 @@ func main() {
 		natsPubSub = realNats
 		log.Printf("Connected to NATS at %s", natsURL)
 	}
-	
+
 	ps = natsPubSub
 
-	// Initialize ClickHouse client
-	chAddr := os.Getenv("CLICKHOUSE_ADDR")
-	if chAddr == "" {
-		chAddr = "localhost:9000"
-	}
-	chDB := os.Getenv("CLICKHOUSE_DB")
-	if chDB == "" {
-		chDB = "default"
-	}
-	chUser := os.Getenv("CLICKHOUSE_USER")
-	if chUser == "" {
-		chUser = "default"
-	}
-	chPass := os.Getenv("CLICKHOUSE_PASSWORD")
-
-	chClient, err = clickhouse.NewClient(chAddr, chDB, chUser, chPass)
-	if err != nil {
-		log.Fatalf("Failed to initialize ClickHouse: %v", err)
-	}
-	log.Printf("Connected to ClickHouse at %s", chAddr)
-
-	// Start periodic cuddle points sync (every 5 minutes)
-	go func() {
-		ticker := time.NewTicker(5 * time.Minute)
-		defer ticker.Stop()
-
-		// Initial sync
-		syncCuddlePoints()
-
-		for range ticker.C {
-			syncCuddlePoints()
+	// Initialize ClickHouse client (or mock in development)
+	var chErr error
+	if environment == "" || environment == "development" {
+		log.Println("Using mock ClickHouse for local development (no ClickHouse server required)")
+		// In development, we'll just skip ClickHouse and use static points
+		chClient = nil
+	} else {
+		chAddr := os.Getenv("CLICKHOUSE_ADDR")
+		if chAddr == "" {
+			chAddr = "localhost:9000"
 		}
-	}()
+		chDB := os.Getenv("CLICKHOUSE_DB")
+		if chDB == "" {
+			chDB = "default"
+		}
+		chUser := os.Getenv("CLICKHOUSE_USER")
+		if chUser == "" {
+			chUser = "default"
+		}
+		chPass := os.Getenv("CLICKHOUSE_PASSWORD")
+
+		chClient, chErr = clickhouse.NewClient(chAddr, chDB, chUser, chPass)
+		if chErr != nil {
+			log.Fatalf("Failed to initialize ClickHouse: %v", chErr)
+		}
+		log.Printf("Connected to ClickHouse at %s", chAddr)
+	}
+
+	// Start periodic cuddle points sync (only in production with ClickHouse)
+	if chClient != nil {
+		go func() {
+			ticker := time.NewTicker(5 * time.Minute)
+			defer ticker.Stop()
+
+			// Initial sync
+			syncCuddlePoints()
+
+			for range ticker.C {
+				syncCuddlePoints()
+			}
+		}()
+	} else {
+		log.Println("Skipping cuddle points sync (ClickHouse not configured)")
+	}
 
 	// Initialize authentication (Authentik OAuth2)
 	authentikBaseURL := os.Getenv("AUTHENTIK_BASE_URL")
@@ -182,7 +193,7 @@ func main() {
 	if grpcPort == "" {
 		grpcPort = "50051"
 	}
-	
+
 	go func() {
 		lis, err := net.Listen("tcp", "0.0.0.0:"+grpcPort)
 		if err != nil {
@@ -221,34 +232,34 @@ func main() {
 
 	// API routes
 	api := handlers.NewAPIHandlers(dataStore, convertPubSub(ps))
-	
+
 	// Draft API
 	mux.HandleFunc("/api/draft/state", api.GetDraftState)
 	mux.HandleFunc("/api/draft/pick", api.DraftPick)
 	mux.HandleFunc("/api/draft/reset", api.ResetDraft)
-	
+
 	// Teams API
 	mux.HandleFunc("/api/teams", api.ListTeams)
 	mux.HandleFunc("/api/teams/add", api.AddTeam)
 	mux.HandleFunc("/api/teams/reorder", api.ReorderTeams)
-	
+
 	// Players API
 	mux.HandleFunc("/api/players/add", api.AddPlayer)
 	mux.HandleFunc("/api/players/points", api.SetPlayerPoints)
 	mux.HandleFunc("/api/players/profile", api.GetPlayerProfile)
-	
+
 	// Chat API
 	mux.HandleFunc("/api/chat/list", api.ListChat)
 	mux.HandleFunc("/api/chat/send", api.SendChatMessage)
 	mux.HandleFunc("/api/chat/react", api.AddReaction)
-	
+
 	// SSE for realtime updates
 	mux.HandleFunc("/api/events", api.EventsSSE)
 
 	// Health check endpoints
 	mux.HandleFunc("/api/health", healthHandler)
-	mux.HandleFunc("/healthz", livenessHandler)  // Kubernetes liveness probe
-	mux.HandleFunc("/readyz", readinessHandler)  // Kubernetes readiness probe
+	mux.HandleFunc("/healthz", livenessHandler) // Kubernetes liveness probe
+	mux.HandleFunc("/readyz", readinessHandler) // Kubernetes readiness probe
 
 	// Start server
 	port := os.Getenv("PORT")
@@ -438,7 +449,7 @@ func livenessHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status": "alive",
+		"status":    "alive",
 		"timestamp": time.Now().Unix(),
 	})
 }
@@ -456,8 +467,8 @@ func readinessHandler(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusServiceUnavailable)
 			json.NewEncoder(w).Encode(map[string]interface{}{
-				"status": "not_ready",
-				"reason": "database_unavailable",
+				"status":    "not_ready",
+				"reason":    "database_unavailable",
 				"timestamp": time.Now().Unix(),
 			})
 			return
@@ -467,7 +478,7 @@ func readinessHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status": "ready",
+		"status":    "ready",
 		"timestamp": time.Now().Unix(),
 	})
 }
@@ -519,7 +530,7 @@ func convertPubSub(ps interface {
 }) *pubsub.PubSub {
 	// Create a local wrapper
 	wrapper := pubsub.New()
-	
+
 	// Subscribe to the NATS pubsub and forward events to local wrapper
 	go func() {
 		ch := ps.Subscribe()
@@ -527,6 +538,6 @@ func convertPubSub(ps interface {
 			wrapper.Publish(event)
 		}
 	}()
-	
+
 	return wrapper
 }

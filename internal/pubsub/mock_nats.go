@@ -20,7 +20,7 @@ type MockNATSPubSub struct {
 func NewMockNATSPubSub(natsURL, subject string) (*MockNATSPubSub, error) {
 	log.Printf("Using mock NATS pub/sub for local development (subject: %s)", subject)
 	log.Printf("Note: Mock NATS does not require a real NATS server connection")
-	
+
 	return &MockNATSPubSub{
 		subject:     subject,
 		subscribers: make([]chan Event, 0),
@@ -34,12 +34,12 @@ func (p *MockNATSPubSub) Publish(event Event) {
 	// Store message for potential replay
 	p.mu.Lock()
 	p.messages = append(p.messages, event)
-	
+
 	// Keep only the last maxMessages
 	if len(p.messages) > p.maxMessages {
 		p.messages = p.messages[len(p.messages)-p.maxMessages:]
 	}
-	
+
 	// Make a copy of subscribers to avoid holding lock during delivery
 	subs := make([]chan Event, len(p.subscribers))
 	copy(subs, p.subscribers)
@@ -93,9 +93,9 @@ func (p *MockNATSPubSub) Unsubscribe(ch chan Event) {
 // In the mock, this is the same as Subscribe but with a consumer name for logging
 func (p *MockNATSPubSub) SubscribeJetStream(consumerName string, handler func(Event)) error {
 	log.Printf("Mock NATS: Creating durable subscription '%s' (simulated)", consumerName)
-	
+
 	ch := p.Subscribe()
-	
+
 	// Start a goroutine to handle events
 	go func() {
 		for event := range ch {
@@ -103,7 +103,7 @@ func (p *MockNATSPubSub) SubscribeJetStream(consumerName string, handler func(Ev
 		}
 		log.Printf("Mock NATS: Durable subscription '%s' closed", consumerName)
 	}()
-	
+
 	return nil
 }
 
@@ -118,7 +118,7 @@ func (p *MockNATSPubSub) ReplayMessages(ch chan Event, count int) {
 	}
 
 	log.Printf("Mock NATS: Replaying %d messages", len(p.messages[start:]))
-	
+
 	for _, event := range p.messages[start:] {
 		select {
 		case ch <- event:
@@ -148,7 +148,7 @@ func (p *MockNATSPubSub) Close() {
 	defer p.mu.Unlock()
 
 	log.Printf("Mock NATS: Closing all subscriptions (%d active)", len(p.subscribers))
-	
+
 	for _, sub := range p.subscribers {
 		close(sub)
 	}

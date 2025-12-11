@@ -185,7 +185,7 @@ func (s *SQLiteDAL) GetState() (*models.DraftState, error) {
 		if err != nil {
 			return nil, err
 		}
-		
+
 		for playerRows.Next() {
 			var playerJSON string
 			if err := playerRows.Scan(&playerJSON); err != nil {
@@ -310,14 +310,14 @@ func (s *SQLiteDAL) ReorderTeams(order []string) ([]models.Team, error) {
 	// SQLite doesn't have a direct way to reorder, so we'll use a temp table
 	// For simplicity, we'll just return teams in the requested order
 	teams := []models.Team{}
-	
+
 	for _, id := range order {
 		var t models.Team
 		err := s.db.QueryRow(`
 			SELECT id, name, owner, mascot, color
 			FROM teams WHERE id = ?
 		`, id).Scan(&t.ID, &t.Name, &t.Owner, &t.Mascot, &t.Color)
-		
+
 		if err == nil {
 			t.Players = []models.Player{}
 			teams = append(teams, t)

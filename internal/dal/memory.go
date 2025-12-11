@@ -12,11 +12,11 @@ import (
 
 // MemoryDAL implements DraftDAL using in-memory storage
 type MemoryDAL struct {
-	mu             sync.RWMutex
-	players        []models.Player
-	teams          []models.Team
-	chat           []models.ChatMessage
-	reactionUsers  map[string]map[string]map[string]bool // messageID -> emote -> userID -> bool
+	mu            sync.RWMutex
+	players       []models.Player
+	teams         []models.Team
+	chat          []models.ChatMessage
+	reactionUsers map[string]map[string]map[string]bool // messageID -> emote -> userID -> bool
 }
 
 // NewMemoryDAL creates a new in-memory data access layer
@@ -27,12 +27,12 @@ func NewMemoryDAL() *MemoryDAL {
 		chat:          []models.ChatMessage{},
 		reactionUsers: make(map[string]map[string]map[string]bool),
 	}
-	
+
 	// Add welcome messages
 	dal.AddChatMessage("Welcome to the Jellycat Draft! 🎉", "system")
 	dal.AddChatMessage("Tip: Click a Jellycat card to draft it!", "system")
 	dal.AddChatMessage("Who will snag Bashful Bunny first? 🐰", "system")
-	
+
 	return dal
 }
 
