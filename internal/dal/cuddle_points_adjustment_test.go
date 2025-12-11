@@ -1,10 +1,10 @@
 package dal
 
 import (
-"fmt"
-"testing"
+	"fmt"
+	"testing"
 
-"github.com/Billy-Davies-2/jellycat-draft-ui/internal/models"
+	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/models"
 )
 
 // TestMemoryDALDraftCuddlePointsAdjustment tests that cuddle points are adjusted based on draft order
