@@ -1,12 +1,235 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;600;700;800&family=Quicksand:wght@400;500;600;700&display=swap');
 
-/* Custom styles for the Jellycat Fantasy Draft */
+@theme {
+  /* Custom colors for Jellycat-inspired palette */
+  --color-jellycat-cream: #FFF9F0;
+  --color-jellycat-beige: #F5EDE0;
+  --color-jellycat-soft-pink: #FFE5EC;
+  --color-jellycat-blush: #FFB5C5;
+  --color-jellycat-lavender: #E8D5F2;
+  --color-jellycat-lilac: #D5B8E0;
+  --color-jellycat-sky: #E0F2FE;
+  --color-jellycat-mint: #D5F5E3;
+  --color-jellycat-peach: #FFE4D6;
+  
+  /* Football-themed colors */
+  --color-football-grass: #C8E6C9;
+  --color-football-field: #A5D6A7;
+  --color-football-orange: #FFCC80;
+  
+  /* Custom shadows */
+  --shadow-soft: 0 2px 15px -3px rgba(255, 182, 193, 0.3), 0 4px 6px -2px rgba(255, 182, 193, 0.15);
+  --shadow-soft-lg: 0 10px 30px -5px rgba(255, 182, 193, 0.4), 0 8px 10px -5px rgba(255, 182, 193, 0.2);
+  --shadow-soft-xl: 0 20px 40px -10px rgba(255, 182, 193, 0.5), 0 15px 20px -10px rgba(255, 182, 193, 0.3);
+  --shadow-football: 0 4px 20px -2px rgba(168, 214, 167, 0.4);
+  
+  /* Custom animations */
+  --animate-float: float 3s ease-in-out infinite;
+  --animate-float-slow: float 4s ease-in-out infinite;
+  
+  /* Font families */
+  --font-sans: 'Nunito', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  --font-display: 'Quicksand', 'Nunito', sans-serif;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background: linear-gradient(135deg, #FFE5EC 0%, #E8D5F2 50%, #E0F2FE 100%);
+  background-attachment: fixed;
+}
+
+/* Custom component styles */
+.btn-jellycat {
+  padding: 0.75rem 1.5rem;
+  border-radius: 1.5rem;
+  font-weight: 600;
+  color: white;
+  box-shadow: var(--shadow-soft);
+  transition: all 0.3s;
+  background: linear-gradient(to right, #f472b6, #a855f7);
+}
+
+.btn-jellycat:hover {
+  background: linear-gradient(to right, #ec4899, #9333ea);
+  box-shadow: var(--shadow-soft-lg);
+  transform: scale(1.05);
+}
+
+.btn-jellycat:active {
+  transform: scale(0.95);
+}
+
+.btn-football {
+  padding: 0.75rem 1.5rem;
+  border-radius: 1.5rem;
+  font-weight: 600;
+  background: linear-gradient(to bottom, #C8E6C9, #A5D6A7);
+  color: #2e7d32;
+  transition: all 0.3s;
+}
+
+.btn-football:hover {
+  box-shadow: var(--shadow-football);
+  transform: scale(1.05);
+}
+
+.card-jellycat {
+  background: white;
+  border-radius: 1rem;
+  border: 2px solid #fbcfe8;
+  box-shadow: var(--shadow-soft);
+  transition: all 0.3s;
+}
+
+.card-jellycat:hover {
+  box-shadow: var(--shadow-soft-lg);
+  border-color: #f9a8d4;
+}
+
+.input-jellycat {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  border: 2px solid #fbcfe8;
+  background: white;
+  transition: all 0.2s;
+}
+
+.input-jellycat:focus {
+  outline: none;
+  border-color: #f9a8d4;
+  box-shadow: 0 0 0 3px rgba(251, 207, 232, 0.3);
+}
+
+.tab-jellycat {
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.75rem 0.75rem 0 0;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.tab-jellycat:hover {
+  background: linear-gradient(to bottom, #fce7f3, #fae8ff);
+}
+
+.tab-jellycat.active {
+  background: linear-gradient(to bottom, #fbcfe8, #e9d5ff);
+  border-bottom: 4px solid #f9a8d4;
+}
+
+.player-card {
+  background: white;
+  border-radius: 1rem;
+  border: 2px solid #e5e7eb;
+  padding: 1rem;
+  cursor: pointer;
+  box-shadow: var(--shadow-soft);
+  transition: all 0.3s;
+}
+
+.player-card:hover {
+  border-color: #f9a8d4;
+  box-shadow: var(--shadow-soft-lg);
+  transform: scale(1.05) rotate(-1deg);
+}
+
+.team-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  border-radius: 9999px;
+  background: linear-gradient(to bottom, #C8E6C9, #A5D6A7);
+  color: #2e7d32;
+  font-weight: 600;
+  box-shadow: var(--shadow-football);
+}
+
+.cuddle-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  background: linear-gradient(to right, #fef3c7, #fbcfe8);
+  color: #7c3aed;
+  font-weight: 700;
+  font-size: 0.875rem;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.text-gradient-jellycat {
+  background: linear-gradient(to right, #ec4899, #a855f7, #3b82f6);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.text-gradient-football {
+  background: linear-gradient(to right, #16a34a, #4ade80);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.animate-float {
+  animation: var(--animate-float);
+}
+
+.animate-float-slow {
+  animation: var(--animate-float-slow);
+}
+
+.animate-bounce-slow {
+  animation: bounce 3s infinite;
+}
+
+.animate-pulse-soft {
+  animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.shadow-soft {
+  box-shadow: var(--shadow-soft);
+}
+
+.shadow-soft-lg {
+  box-shadow: var(--shadow-soft-lg);
+}
+
+.shadow-soft-xl {
+  box-shadow: var(--shadow-soft-xl);
+}
+
+.shadow-football {
+  box-shadow: var(--shadow-football);
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #fce7f3;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(to bottom, #f9a8d4, #e9d5ff);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(to bottom, #f472b6, #d8b4fe);
 }

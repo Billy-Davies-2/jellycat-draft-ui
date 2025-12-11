@@ -11,31 +11,35 @@
     <!-- Alpine.js for reactive client-side interactions -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js" integrity="sha384-LJQ3YeL7n9b1I0x5y7h1HiFkr3F7vW0bFfvvJfvRF9e9E2F2IfFdKf4thCK0mYGp" crossorigin="anonymous"></script>
 </head>
-<body class="bg-gradient-to-br from-pink-50 via-purple-50 to-blue-50 min-h-screen">
+<body class="min-h-screen" style="background: linear-gradient(135deg, #FFE5EC 0%, #E8D5F2 50%, #E0F2FE 100%); background-attachment: fixed;">
+    <!-- Decorative football elements -->
+    <div class="fixed top-10 right-10 text-6xl opacity-20 animate-float-slow pointer-events-none">⚽</div>
+    <div class="fixed bottom-20 left-20 text-5xl opacity-20 animate-bounce-slow pointer-events-none">🧸</div>
+    <div class="fixed top-1/3 left-10 text-4xl opacity-15 animate-float pointer-events-none">🏈</div>
     <!-- User info bar (if authenticated) -->
     {{ if .User }}
-    <div class="bg-white border-b border-gray-200 px-4 py-2 flex justify-between items-center" x-data="{ showMenu: false }">
+    <div class="bg-white/90 backdrop-blur-sm border-b-2 border-pink-200 px-4 py-3 flex justify-between items-center shadow-soft" x-data="{ showMenu: false }">
         <div class="flex items-center space-x-4">
-            <span class="text-sm text-gray-600">Welcome, <strong>{{ .User.Name }}</strong></span>
+            <span class="text-sm text-gray-700">Welcome, <strong class="text-gradient-jellycat font-display">{{ .User.Name }}</strong> <span class="text-xl">🧸</span></span>
             {{ if .IsAdmin }}
-            <a href="/admin" class="text-sm text-purple-600 hover:text-purple-800 font-medium">
-                🔧 Admin Panel
+            <a href="/admin" class="text-sm px-3 py-1.5 rounded-full bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 hover:from-purple-200 hover:to-pink-200 font-semibold transition-all duration-200">
+                ✨ Admin Panel
             </a>
             {{ end }}
         </div>
         <div class="relative">
-            <button @click="showMenu = !showMenu" class="flex items-center space-x-2 text-sm text-gray-700 hover:text-gray-900">
-                <span>{{ .User.Username }}</span>
-                {{ if .IsAdmin }}<span class="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">Admin</span>{{ end }}
+            <button @click="showMenu = !showMenu" class="flex items-center space-x-2 text-sm px-4 py-2 rounded-full bg-white border-2 border-pink-200 hover:border-pink-300 text-gray-700 hover:shadow-soft transition-all duration-200">
+                <span class="font-semibold">{{ .User.Username }}</span>
+                {{ if .IsAdmin }}<span class="text-xs bg-purple-200 text-purple-800 px-2 py-1 rounded-full font-semibold">Admin</span>{{ end }}
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                 </svg>
             </button>
-            <div x-show="showMenu" @click.away="showMenu = false" class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
+            <div x-show="showMenu" @click.away="showMenu = false" class="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-soft-lg py-2 z-50 border-2 border-pink-200">
                 {{ if .IsAdmin }}
-                <a href="/admin" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Admin Panel</a>
+                <a href="/admin" class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gradient-to-r hover:from-pink-50 hover:to-purple-50 font-medium rounded-xl mx-2">✨ Admin Panel</a>
                 {{ end }}
-                <a href="/auth/logout" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Logout</a>
+                <a href="/auth/logout" class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gradient-to-r hover:from-pink-50 hover:to-purple-50 font-medium rounded-xl mx-2">👋 Logout</a>
             </div>
         </div>
     </div>

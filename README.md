@@ -12,7 +12,7 @@ A realtime fantasy draft application for Jellycat plush toys, built with **Go**,
   - Alpine.js for enriched client-side reactivity (search, filtering, UI state)
   - Server-Sent Events (SSE) for realtime updates
 - **Authentication**: Authentik OAuth2/OIDC with role-based access control
-- **Styling**: TailwindCSS for modern, responsive design
+- **Styling**: TailwindCSS v4 with custom Jellycat-inspired design system
 - **Templates**: Go's html/template for server-side rendering
 - **Data**: Pluggable DAL supporting memory, SQLite, and PostgreSQL
 - **Messaging**: NATS JetStream for distributed pub/sub
@@ -27,7 +27,8 @@ A realtime fantasy draft application for Jellycat plush toys, built with **Go**,
 - 📊 Real-time updates via SSE (HTTP) and gRPC streaming
 - 🔐 Secure authentication via Authentik OAuth2/OIDC
 - 👑 Role-based access control (admins can access admin panel)
-- 🎨 Beautiful UI with TailwindCSS
+- 🎨 Beautiful UI with custom Jellycat-inspired design (soft pastels, rounded corners, gentle animations)
+- ⚽ Subtle football-themed elements integrated into the design
 - ⚡ Alpine.js for reactive client-side interactions (search, filters, notifications)
 - 🗄️ Multiple storage backends (memory, SQLite, PostgreSQL)
 - 📡 NATS JetStream for distributed messaging
@@ -189,8 +190,22 @@ These mocks should **only** be imported and used in test files (`*_test.go`).
 │   └── admin.html              # Admin panel (requires admin role)
 └── static/                     # Static assets
     ├── css/                    # TailwindCSS stylesheets
+    │   ├── input.css           # Source CSS with custom Jellycat styles
+    │   └── styles.css          # Compiled CSS (generated)
     └── images/                 # Jellycat images (18 plushies)
 ```
+
+## Design System
+
+The application features a custom Jellycat-inspired design with subtle football-themed elements:
+
+- **Color Palette**: Soft pastels (pinks, purples, blues) with warm accents
+- **Typography**: Nunito and Quicksand fonts for a friendly, rounded aesthetic
+- **Animations**: Gentle floating and pulsing effects
+- **Components**: Custom-styled buttons, cards, inputs, and badges
+- **Shadows**: Soft pink-tinted shadows for depth
+
+For complete design documentation, see [DESIGN_GUIDE.md](DESIGN_GUIDE.md).
 
 ## Testing
 
@@ -350,7 +365,9 @@ protoc --go_out=. --go_opt=paths=source_relative \
 
 ## Rebuilding Styles
 
-If you modify TailwindCSS styles:
+The application uses TailwindCSS v4 with a custom Jellycat-inspired design system.
+
+If you modify TailwindCSS styles in `static/css/input.css` or `tailwind.config.js`:
 
 ```bash
 # Download TailwindCSS CLI (one time)
@@ -358,8 +375,19 @@ curl -sLO https://github.com/tailwindlabs/tailwindcss/releases/latest/download/t
 chmod +x tailwindcss-linux-x64
 
 # Rebuild styles
-./tailwindcss-linux-x64 -c tailwind.config.go.js -i static/css/input.css -o static/css/styles.css --minify
+./tailwindcss-linux-x64 -i static/css/input.css -o static/css/styles.css --minify
 ```
+
+### Custom Styles
+
+The design system includes:
+- **Custom color palette**: Soft pastels and football-themed accents
+- **Custom components**: `.btn-jellycat`, `.card-jellycat`, `.input-jellycat`, etc.
+- **Animations**: `.animate-float`, `.animate-bounce-slow`, `.animate-pulse-soft`
+- **Text gradients**: `.text-gradient-jellycat`, `.text-gradient-football`
+- **Shadows**: `.shadow-soft`, `.shadow-soft-lg`, `.shadow-football`
+
+See [DESIGN_GUIDE.md](DESIGN_GUIDE.md) for complete design documentation.
 
 ## Adding New Data Drivers
 
