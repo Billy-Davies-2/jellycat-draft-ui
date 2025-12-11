@@ -222,8 +222,10 @@ func main() {
 	// SSE for realtime updates
 	mux.HandleFunc("/api/events", api.EventsSSE)
 
-	// Health check
+	// Health check endpoints
 	mux.HandleFunc("/api/health", healthHandler)
+	mux.HandleFunc("/healthz", livenessHandler)  // Kubernetes liveness probe
+	mux.HandleFunc("/readyz", readinessHandler)  // Kubernetes readiness probe
 
 	// Start server
 	port := os.Getenv("PORT")
@@ -338,12 +340,113 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {
-	response := map[string]interface{}{
-		"status":    "ok",
-		"timestamp": time.Now().Unix(),
+	ctx := context.Background()
+	status := "ok"
+	httpStatus := http.StatusOK
+	checks := make(map[string]interface{})
+
+	// Check database connectivity
+	if dataStore != nil {
+		_, err := dataStore.GetState()
+		if err != nil {
+			status = "degraded"
+			httpStatus = http.StatusServiceUnavailable
+			checks["database"] = map[string]interface{}{
+				"status": "unhealthy",
+				"error":  err.Error(),
+			}
+		} else {
+			checks["database"] = map[string]interface{}{
+				"status": "healthy",
+			}
+		}
+	} else {
+		checks["database"] = map[string]interface{}{
+			"status": "not_configured",
+		}
 	}
+
+	// Check ClickHouse connectivity (only in production)
+	environment := os.Getenv("ENVIRONMENT")
+	if environment == "production" && chClient != nil {
+		_, err := chClient.GetAllCuddlePoints()
+		if err != nil {
+			status = "degraded"
+			httpStatus = http.StatusServiceUnavailable
+			checks["clickhouse"] = map[string]interface{}{
+				"status": "unhealthy",
+				"error":  err.Error(),
+			}
+		} else {
+			checks["clickhouse"] = map[string]interface{}{
+				"status": "healthy",
+			}
+		}
+	} else if environment == "production" {
+		checks["clickhouse"] = map[string]interface{}{
+			"status": "not_configured",
+		}
+	}
+
+	// Check NATS connectivity (only in production) - We can verify by trying to publish a test event
+	if environment == "production" && ps != nil {
+		// Just verify ps is available - actual connection health is handled internally by NATS
+		checks["nats"] = map[string]interface{}{
+			"status": "healthy",
+		}
+	}
+
+	_ = ctx // Context ready for future use
+
+	response := map[string]interface{}{
+		"status":    status,
+		"timestamp": time.Now().Unix(),
+		"checks":    checks,
+	}
+
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(httpStatus)
 	json.NewEncoder(w).Encode(response)
+}
+
+// livenessHandler handles Kubernetes liveness probes
+// Returns 200 if the application is running (doesn't check dependencies)
+func livenessHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status": "alive",
+		"timestamp": time.Now().Unix(),
+	})
+}
+
+// readinessHandler handles Kubernetes readiness probes
+// Returns 200 if the application is ready to serve traffic (checks critical dependencies)
+func readinessHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+	_ = ctx // Context ready for future use
+
+	// Check database connectivity - this is critical for readiness
+	if dataStore != nil {
+		_, err := dataStore.GetState()
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"status": "not_ready",
+				"reason": "database_unavailable",
+				"timestamp": time.Now().Unix(),
+			})
+			return
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status": "ready",
+		"timestamp": time.Now().Unix(),
+	})
 }
 
 // syncCuddlePoints syncs cuddle points from ClickHouse
