@@ -38,11 +38,6 @@
   50% { transform: translateY(-10px); }
 }
 
-@keyframes wiggle {
-  0%, 100% { transform: rotate(-3deg); }
-  50% { transform: rotate(3deg); }
-}
-
 body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;

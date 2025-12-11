@@ -83,17 +83,12 @@ module.exports = {
       animation: {
         'bounce-slow': 'bounce 3s infinite',
         'float': 'float 3s ease-in-out infinite',
-        'wiggle': 'wiggle 1s ease-in-out infinite',
         'pulse-soft': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
       },
       keyframes: {
         float: {
           '0%, 100%': { transform: 'translateY(0px)' },
           '50%': { transform: 'translateY(-10px)' },
-        },
-        wiggle: {
-          '0%, 100%': { transform: 'rotate(-3deg)' },
-          '50%': { transform: 'rotate(3deg)' },
         },
       },
       backgroundImage: {
