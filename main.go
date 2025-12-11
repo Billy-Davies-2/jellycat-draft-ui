@@ -185,6 +185,9 @@ func main() {
 	fs := http.FileServer(http.Dir("static"))
 	mux.Handle("/static/", http.StripPrefix("/static/", fs))
 
+	// Image serving from database (fallback to static files if not in DB)
+	mux.HandleFunc("/images/", serveImageHandler)
+
 	// Auth routes (public)
 	mux.HandleFunc("/auth/login", authProvider.LoginHandler)
 	mux.HandleFunc("/auth/callback", authProvider.CallbackHandler)
@@ -447,6 +450,27 @@ func readinessHandler(w http.ResponseWriter, r *http.Request) {
 		"status": "ready",
 		"timestamp": time.Now().Unix(),
 	})
+}
+
+// serveImageHandler serves images from the database or falls back to static files
+func serveImageHandler(w http.ResponseWriter, r *http.Request) {
+	// Extract the image path
+	imagePath := "/static" + r.URL.Path // Convert /images/xyz.png to /static/images/xyz.png
+
+	// Try to get image from database if using PostgresDAL
+	if pgDAL, ok := dataStore.(*dal.PostgresDAL); ok {
+		imageData, err := pgDAL.GetPlayerImageByPath(imagePath)
+		if err == nil && len(imageData) > 0 {
+			// Successfully retrieved from database
+			w.Header().Set("Content-Type", "image/png")
+			w.Header().Set("Cache-Control", "public, max-age=31536000") // Cache for 1 year
+			w.Write(imageData)
+			return
+		}
+	}
+
+	// Fallback to serving from static files
+	http.ServeFile(w, r, "static"+r.URL.Path)
 }
 
 // syncCuddlePoints syncs cuddle points from ClickHouse
