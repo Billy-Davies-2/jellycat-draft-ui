@@ -37,24 +37,24 @@ func NewPostgresDAL(connString string) (*PostgresDAL, error) {
 	maxRetries := 5
 	retryDelay := 5 * time.Second
 	var lastErr error
-	
+
 	for i := 0; i < maxRetries; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		err := db.PingContext(ctx)
 		cancel()
-		
+
 		if err == nil {
 			// Connection successful
 			break
 		}
-		
+
 		lastErr = err
 		if i < maxRetries-1 {
 			// Wait before retrying (unless it's the last attempt)
 			time.Sleep(retryDelay)
 		}
 	}
-	
+
 	if lastErr != nil {
 		return nil, fmt.Errorf("failed to ping postgres after %d retries: %w", maxRetries, lastErr)
 	}
