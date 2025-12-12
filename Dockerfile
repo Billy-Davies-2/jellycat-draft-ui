@@ -9,9 +9,8 @@ WORKDIR /app
 RUN apk update && apk add --no-cache gcc musl-dev sqlite-dev curl
 
 # Download TailwindCSS standalone CLI
-RUN curl -sLO https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64 && \
-    chmod +x tailwindcss-linux-x64
-
+RUN curl -sL https://github.com/tailwindlabs/tailwindcss/releases/download/v4.1.18/tailwindcss-linux-x64-musl -o tailwindcss && \
+  chmod +x tailwindcss
 # Copy go mod files
 COPY go.mod go.sum ./
 RUN go mod download
@@ -20,7 +19,7 @@ RUN go mod download
 COPY . .
 
 # Build TailwindCSS
-RUN ./tailwindcss-linux-x64 -i static/css/input.css -o static/css/styles.css --minify
+RUN ./tailwindcss -i static/css/input.css -o static/css/styles.css --minify
 
 # Build the application as a static binary
 # Note: We link statically against musl and sqlite
