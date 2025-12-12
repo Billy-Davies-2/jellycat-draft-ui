@@ -359,11 +359,11 @@ function adminApp() {
                     </div>
                     
                     <div class="flex gap-2 mt-3">
-                        <button onclick="openEditModal('${player.id}', '${this.escapeHtml(player.name)}', '${player.position}', '${player.tier}', '${this.escapeHtml(player.team)}', ${cuddlePoints}, '${image}')" 
+                        <button onclick="openEditModal('${this.escapeJsString(player.id)}', '${this.escapeJsString(player.name)}', '${this.escapeJsString(player.position)}', '${this.escapeJsString(player.tier)}', '${this.escapeJsString(player.team)}', ${cuddlePoints}, '${this.escapeJsString(image)}')" 
                                 class="flex-1 px-3 py-2 rounded-xl text-sm font-semibold text-blue-700 bg-blue-100 hover:bg-blue-200 border-2 border-blue-300 transition-all duration-200">
                             ✏️ Edit
                         </button>
-                        <button onclick="deletePlayer('${player.id}', '${this.escapeHtml(player.name)}')" 
+                        <button onclick="deletePlayer('${this.escapeJsString(player.id)}', '${this.escapeJsString(player.name)}')" 
                                 class="flex-1 px-3 py-2 rounded-xl text-sm font-semibold text-red-700 bg-red-100 hover:bg-red-200 border-2 border-red-300 transition-all duration-200">
                             🗑️ Delete
                         </button>
@@ -376,6 +376,17 @@ function adminApp() {
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        },
+        
+        // Escape for use in JavaScript string literals within HTML attributes
+        escapeJsString(text) {
+            if (!text) return '';
+            return String(text)
+                .replace(/\\/g, '\\\\')
+                .replace(/'/g, "\\'")
+                .replace(/"/g, '\\"')
+                .replace(/</g, '\\x3c')
+                .replace(/>/g, '\\x3e');
         },
         
         showNotification(message, type = 'info') {
