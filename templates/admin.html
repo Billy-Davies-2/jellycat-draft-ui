@@ -1,8 +1,22 @@
 {{ define "content" }}
-<div class="container mx-auto px-4 py-8 relative">
+<div class="container mx-auto px-4 py-8 relative" x-data="adminApp()" x-init="init()">
     <!-- Decorative elements -->
     <div class="absolute top-10 right-10 text-5xl opacity-10 animate-float">⚽</div>
     <div class="absolute bottom-10 left-10 text-5xl opacity-10 animate-bounce-slow">🧸</div>
+    
+    <!-- Notification component -->
+    <div x-show="notification" x-transition
+         class="fixed top-4 right-4 z-50 max-w-sm"
+         style="display: none;">
+        <div :class="{
+            'bg-green-100 border-green-400 text-green-700': notification && notification.type === 'success',
+            'bg-blue-100 border-blue-400 text-blue-700': notification && notification.type === 'info',
+            'bg-red-100 border-red-400 text-red-700': notification && notification.type === 'error'
+        }" 
+        class="border px-4 py-3 rounded-lg shadow-lg">
+            <p x-text="notification ? notification.message : ''"></p>
+        </div>
+    </div>
     
     <div class="mb-10 relative z-10">
         <h1 class="text-5xl font-display font-bold text-gradient-jellycat mb-3">
@@ -18,7 +32,7 @@
                 <h2 class="font-display font-bold text-2xl text-gradient-jellycat">🧸 Add New Jellycat</h2>
             </div>
             <div class="p-6">
-                <form hx-post="/api/players/add" hx-swap="none" onsubmit="this.reset(); alert('Jellycat added!');">
+                <form id="addPlayerForm" onsubmit="addPlayer(event)">
                     <div class="space-y-5">
                         <div>
                             <label class="block text-sm font-semibold text-gray-800 mb-2 font-display">Name</label>
@@ -104,7 +118,7 @@
             <h2 class="font-display font-bold text-2xl text-gradient-jellycat">🌟 Current Jellycats</h2>
         </div>
         <div class="p-6">
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+            <div id="players-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                 {{ range .Players }}
                 <div class="border-2 border-pink-200 rounded-2xl p-5 {{ if .Drafted }}bg-gray-50 opacity-70{{ else }}bg-white hover:shadow-soft-lg{{ end }} transition-all duration-300" data-player-id="{{ .ID }}">
                     <div class="flex items-center gap-3 mb-3">
@@ -237,6 +251,177 @@
 </div>
 
 <script>
+// Alpine.js admin app component
+function adminApp() {
+    return {
+        notification: null,
+        
+        init() {
+            // Listen for SSE events and update UI dynamically
+            const eventSource = new EventSource('/api/events');
+            
+            eventSource.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'players:add') {
+                        // Fetch and display the new player
+                        this.fetchAndAddPlayer(data.payload?.id);
+                        this.showNotification('New Jellycat added! 🧸', 'success');
+                    } else if (data.type === 'players:update') {
+                        // Reload the page to show updated player
+                        this.showNotification('Jellycat updated! ✨', 'success');
+                        setTimeout(() => window.location.reload(), 500);
+                    } else if (data.type === 'players:delete') {
+                        // Remove the player from UI
+                        const playerId = data.payload?.id;
+                        if (playerId) {
+                            const playerCard = document.querySelector(`[data-player-id="${playerId}"]`);
+                            if (playerCard) {
+                                playerCard.style.transition = 'all 0.3s ease-out';
+                                playerCard.style.opacity = '0';
+                                playerCard.style.transform = 'scale(0.8)';
+                                setTimeout(() => playerCard.remove(), 300);
+                            }
+                        }
+                        this.showNotification('Jellycat deleted! 🗑️', 'info');
+                    } else if (data.type === 'draft:reset') {
+                        this.showNotification('Draft reset! 🔄', 'info');
+                        setTimeout(() => window.location.reload(), 500);
+                    }
+                } catch (e) {
+                    // Ignore parse errors for keepalive messages
+                }
+            };
+        },
+        
+        async fetchAndAddPlayer(playerId) {
+            try {
+                const response = await fetch('/api/draft/state');
+                if (!response.ok) return;
+                const state = await response.json();
+                
+                // Find the new player
+                const player = state.players.find(p => p.id === playerId);
+                if (!player) return;
+                
+                // Check if player already exists in DOM
+                const existingCard = document.querySelector(`[data-player-id="${playerId}"]`);
+                if (existingCard) return;
+                
+                // Create and add the player card
+                const playersGrid = document.getElementById('players-grid');
+                if (playersGrid) {
+                    const playerCard = this.createPlayerCard(player);
+                    playersGrid.insertAdjacentHTML('beforeend', playerCard);
+                }
+            } catch (e) {
+                console.error('Failed to fetch new player:', e);
+            }
+        },
+        
+        createPlayerCard(player) {
+            const positionClass = player.position === 'CC' ? 'bg-pink-100 text-pink-700 border-pink-300' :
+                                  player.position === 'SS' ? 'bg-purple-100 text-purple-700 border-purple-300' :
+                                  player.position === 'HH' ? 'bg-blue-100 text-blue-700 border-blue-300' :
+                                  'bg-green-100 text-green-700 border-green-300';
+            
+            const tierClass = player.tier === 'S' ? 'bg-yellow-200 text-yellow-900' :
+                              player.tier === 'A' ? 'bg-green-200 text-green-900' :
+                              player.tier === 'B' ? 'bg-blue-200 text-blue-900' :
+                              'bg-gray-200 text-gray-800';
+            
+            const image = player.image || '/static/images/placeholder.png';
+            const cuddlePoints = player.cuddlePoints || player.points || 0;
+            
+            return `
+                <div class="border-2 border-pink-200 rounded-2xl p-5 bg-white hover:shadow-soft-lg transition-all duration-300" data-player-id="${player.id}" style="animation: fadeIn 0.3s ease-out;">
+                    <div class="flex items-center gap-3 mb-3">
+                        <img src="${image}" alt="${player.name}" 
+                             class="w-20 h-20 rounded-2xl object-cover border-2 border-pink-200 shadow-soft"
+                             onerror="this.src='/static/images/placeholder.png'">
+                        <div class="flex-1">
+                            <div class="font-bold text-sm font-display text-gray-800">${this.escapeHtml(player.name)}</div>
+                            <div class="text-xs text-gray-600 mt-1">${this.escapeHtml(player.team)}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="px-3 py-1.5 rounded-full text-xs font-semibold border-2 ${positionClass}">
+                            ${player.position}
+                        </span>
+                        <span class="px-3 py-1.5 rounded-full text-xs font-bold ${tierClass}">
+                            Tier ${player.tier}
+                        </span>
+                    </div>
+                    
+                    <div class="text-center mb-3">
+                        <div class="cuddle-badge text-base">${cuddlePoints} Cuddle Points</div>
+                    </div>
+                    
+                    <div class="flex gap-2 mt-3">
+                        <button onclick="openEditModal('${player.id}', '${this.escapeHtml(player.name)}', '${player.position}', '${player.tier}', '${this.escapeHtml(player.team)}', ${cuddlePoints}, '${image}')" 
+                                class="flex-1 px-3 py-2 rounded-xl text-sm font-semibold text-blue-700 bg-blue-100 hover:bg-blue-200 border-2 border-blue-300 transition-all duration-200">
+                            ✏️ Edit
+                        </button>
+                        <button onclick="deletePlayer('${player.id}', '${this.escapeHtml(player.name)}')" 
+                                class="flex-1 px-3 py-2 rounded-xl text-sm font-semibold text-red-700 bg-red-100 hover:bg-red-200 border-2 border-red-300 transition-all duration-200">
+                            🗑️ Delete
+                        </button>
+                    </div>
+                </div>
+            `;
+        },
+        
+        escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        },
+        
+        showNotification(message, type = 'info') {
+            this.notification = { message, type };
+            setTimeout(() => {
+                this.notification = null;
+            }, 3000);
+        }
+    };
+}
+
+async function addPlayer(event) {
+    event.preventDefault();
+    const form = event.target;
+    const formData = new FormData(form);
+    
+    const data = {
+        name: formData.get('name'),
+        position: formData.get('position'),
+        tier: formData.get('tier'),
+        team: formData.get('team'),
+        cuddlePoints: parseInt(formData.get('cuddlePoints')) || 0,
+        image: formData.get('image') || '/static/images/placeholder.png'
+    };
+    
+    try {
+        const response = await fetch('/api/players/add', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+        
+        if (response.ok) {
+            form.reset();
+            // SSE will handle the UI update
+        } else {
+            const error = await response.text();
+            alert('Error adding Jellycat: ' + error);
+        }
+    } catch (err) {
+        alert('Error adding Jellycat: ' + err.message);
+    }
+}
+
 function openEditModal(id, name, position, tier, team, cuddlePoints, image) {
     document.getElementById('editId').value = id;
     document.getElementById('editName').value = name;
@@ -275,9 +460,8 @@ async function submitEditForm(event) {
         });
         
         if (response.ok) {
-            alert('Jellycat updated successfully!');
             closeEditModal();
-            window.location.reload();
+            // SSE will handle the notification and reload
         } else {
             const error = await response.text();
             alert('Error updating Jellycat: ' + error);
@@ -301,13 +485,11 @@ async function deletePlayer(id, name) {
             body: JSON.stringify({ id: id })
         });
         
-        if (response.ok) {
-            alert('Jellycat deleted successfully!');
-            window.location.reload();
-        } else {
+        if (!response.ok) {
             const error = await response.text();
             alert('Error deleting Jellycat: ' + error);
         }
+        // SSE will handle the UI update
     } catch (err) {
         alert('Error deleting Jellycat: ' + err.message);
     }
