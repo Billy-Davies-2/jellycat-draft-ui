@@ -95,6 +95,7 @@ export CLICKHOUSE_PASSWORD="secret"
 | `ENVIRONMENT` | Environment mode (`development`, `production`) | `development` | No |
 | `PORT` | HTTP server port | `3000` | No |
 | `GRPC_PORT` | gRPC server port | `50051` | No |
+| `LOG_LEVEL` | Logging level (`debug`, `info`, `warn`, `error`) | `info` | No |
 | **PostgreSQL** ||||
 | `DATABASE_URL` | PostgreSQL connection string | - | Yes (prod) |
 | **NATS JetStream** ||||
@@ -268,6 +269,80 @@ GROUP BY jellycat_id
 ```
 
 Points are synced every 5 minutes automatically.
+
+## Logging
+
+The microservice uses **structured logging** with `slog` for all components. Logs are output in JSON format to stdout for easy integration with log aggregation systems.
+
+### Configuration
+
+Configure the logging level using the `LOG_LEVEL` environment variable:
+
+```bash
+# Production: minimal logging (default)
+export LOG_LEVEL=info
+
+# Development: verbose logging
+export LOG_LEVEL=debug
+
+# Only warnings and errors
+export LOG_LEVEL=warn
+
+# Only errors
+export LOG_LEVEL=error
+```
+
+### Log Levels
+
+- **`debug`**: Detailed information for debugging, including:
+  - HTTP request/response details
+  - gRPC method calls
+  - Database query information
+  - Pub/sub event details
+  - Internal component state changes
+
+- **`info`**: General informational messages (default for production):
+  - Service startup and configuration
+  - Database connections
+  - Major operations (draft picks, team additions)
+  - Periodic sync operations
+
+- **`warn`**: Warning messages for non-critical issues:
+  - Slow subscribers in pub/sub
+  - Degraded health check status
+  - Retry operations
+
+- **`error`**: Error messages requiring attention:
+  - Failed database operations
+  - gRPC/HTTP handler errors
+  - External service failures
+
+### Example Usage
+
+```bash
+# Development with debug logging
+LOG_LEVEL=debug ENVIRONMENT=development ./jellycat-draft
+
+# Production with info logging (default)
+LOG_LEVEL=info ENVIRONMENT=production \
+  DATABASE_URL="postgres://..." \
+  NATS_URL="nats://..." \
+  ./jellycat-draft
+
+# Production with minimal logging
+LOG_LEVEL=error ENVIRONMENT=production ./jellycat-draft
+```
+
+### Log Format
+
+All logs are output in JSON format with structured fields:
+
+```json
+{"time":"2024-01-15T10:30:45Z","level":"INFO","msg":"Server starting","address":"0.0.0.0:3000"}
+{"time":"2024-01-15T10:30:46Z","level":"DEBUG","msg":"gRPC: Getting draft state"}
+{"time":"2024-01-15T10:30:47Z","level":"INFO","msg":"Drafting player","player_id":"1","team_id":"team-1"}
+{"time":"2024-01-15T10:30:48Z","level":"ERROR","msg":"Failed to draft player","error":"player already drafted","player_id":"1"}
+```
 
 ## Development with Mocks
 

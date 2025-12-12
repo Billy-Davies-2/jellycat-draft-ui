@@ -1,8 +1,7 @@
 package mocks
 
 import (
-	"log"
-
+	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/logger"
 	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/pubsub"
 )
 
@@ -13,7 +12,7 @@ type MockNATSPubSub struct {
 
 // NewMockNATSPubSub creates a mock NATS pub/sub using the in-memory implementation
 func NewMockNATSPubSub() *MockNATSPubSub {
-	log.Println("Using MOCK NATS/JetStream (in-memory pub/sub) for local development")
+	logger.Info("Using MOCK NATS/JetStream (in-memory pub/sub) for local development")
 
 	return &MockNATSPubSub{
 		PubSub: pubsub.New(),

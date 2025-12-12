@@ -3,9 +3,9 @@ package pubsub
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"sync"
 
+	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/logger"
 	"github.com/nats-io/nats.go"
 )
 
@@ -64,16 +64,18 @@ func NewNATSPubSub(natsURL, subject string) (*NATSPubSub, error) {
 func (p *NATSPubSub) Publish(event Event) {
 	data, err := json.Marshal(event)
 	if err != nil {
-		log.Printf("Failed to marshal event: %v", err)
+		logger.Error("Failed to marshal event", "error", err, "event_type", event.Type)
 		return
 	}
 
 	// Publish to JetStream
 	_, err = p.js.Publish(p.subject, data)
 	if err != nil {
-		log.Printf("Failed to publish to NATS: %v", err)
+		logger.Error("Failed to publish to NATS", "error", err, "subject", p.subject, "event_type", event.Type)
 		return
 	}
+
+	logger.Debug("Published event to NATS", "event_type", event.Type, "subject", p.subject)
 
 	// Also send to local subscribers for in-process delivery
 	p.mu.RLock()
@@ -122,7 +124,7 @@ func (p *NATSPubSub) SubscribeJetStream(consumerName string, handler func(Event)
 	_, err := p.js.Subscribe(p.subject, func(msg *nats.Msg) {
 		var event Event
 		if err := json.Unmarshal(msg.Data, &event); err != nil {
-			log.Printf("Failed to unmarshal event: %v", err)
+			logger.Error("Failed to unmarshal event", "error", err)
 			msg.Nak()
 			return
 		}

@@ -2,8 +2,9 @@ package pubsub
 
 import (
 	"encoding/json"
-	"log"
 	"sync"
+
+	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/logger"
 )
 
 // MockNATSPubSub implements a mock NATS JetStream pub/sub for local development
@@ -18,8 +19,8 @@ type MockNATSPubSub struct {
 
 // NewMockNATSPubSub creates a new mock NATS JetStream pub/sub for local development
 func NewMockNATSPubSub(natsURL, subject string) (*MockNATSPubSub, error) {
-	log.Printf("Using mock NATS pub/sub for local development (subject: %s)", subject)
-	log.Printf("Note: Mock NATS does not require a real NATS server connection")
+	logger.Info("Using mock NATS pub/sub for local development", "subject", subject)
+	logger.Debug("Note: Mock NATS does not require a real NATS server connection")
 
 	return &MockNATSPubSub{
 		subject:     subject,
@@ -51,13 +52,13 @@ func (p *MockNATSPubSub) Publish(event Event) {
 		case sub <- event:
 		default:
 			// Subscriber is slow or blocked, skip
-			log.Printf("Mock NATS: Skipping slow subscriber for event type: %s", event.Type)
+			logger.Warn("Mock NATS: Skipping slow subscriber", "event_type", event.Type)
 		}
 	}
 
 	// Log in development mode
 	data, _ := json.Marshal(event)
-	log.Printf("Mock NATS: Published event [%s]: %s", event.Type, string(data))
+	logger.Debug("Mock NATS: Published event", "event_type", event.Type, "data", string(data))
 }
 
 // Subscribe creates a subscription channel for events
@@ -69,7 +70,7 @@ func (p *MockNATSPubSub) Subscribe() chan Event {
 	subCount := len(p.subscribers)
 	p.mu.Unlock()
 
-	log.Printf("Mock NATS: New subscriber added (total: %d)", subCount)
+	logger.Debug("Mock NATS: New subscriber added", "total_subscribers", subCount)
 	return ch
 }
 
@@ -83,7 +84,7 @@ func (p *MockNATSPubSub) Unsubscribe(ch chan Event) {
 			// Remove from slice
 			p.subscribers = append(p.subscribers[:i], p.subscribers[i+1:]...)
 			close(ch)
-			log.Printf("Mock NATS: Subscriber removed (remaining: %d)", len(p.subscribers))
+			logger.Debug("Mock NATS: Subscriber removed", "remaining_subscribers", len(p.subscribers))
 			break
 		}
 	}
@@ -92,7 +93,7 @@ func (p *MockNATSPubSub) Unsubscribe(ch chan Event) {
 // SubscribeJetStream simulates a durable JetStream subscription
 // In the mock, this is the same as Subscribe but with a consumer name for logging
 func (p *MockNATSPubSub) SubscribeJetStream(consumerName string, handler func(Event)) error {
-	log.Printf("Mock NATS: Creating durable subscription '%s' (simulated)", consumerName)
+	logger.Debug("Mock NATS: Creating durable subscription (simulated)", "consumer_name", consumerName)
 
 	ch := p.Subscribe()
 
@@ -101,7 +102,7 @@ func (p *MockNATSPubSub) SubscribeJetStream(consumerName string, handler func(Ev
 		for event := range ch {
 			handler(event)
 		}
-		log.Printf("Mock NATS: Durable subscription '%s' closed", consumerName)
+		logger.Debug("Mock NATS: Durable subscription closed", "consumer_name", consumerName)
 	}()
 
 	return nil
@@ -117,13 +118,13 @@ func (p *MockNATSPubSub) ReplayMessages(ch chan Event, count int) {
 		start = 0
 	}
 
-	log.Printf("Mock NATS: Replaying %d messages", len(p.messages[start:]))
+	logger.Debug("Mock NATS: Replaying messages", "count", len(p.messages[start:]))
 
 	for _, event := range p.messages[start:] {
 		select {
 		case ch <- event:
 		default:
-			log.Printf("Mock NATS: Channel full during replay, skipping event")
+			logger.Warn("Mock NATS: Channel full during replay, skipping event")
 		}
 	}
 }
@@ -147,7 +148,7 @@ func (p *MockNATSPubSub) Close() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	log.Printf("Mock NATS: Closing all subscriptions (%d active)", len(p.subscribers))
+	logger.Info("Mock NATS: Closing all subscriptions", "active_subscriptions", len(p.subscribers))
 
 	for _, sub := range p.subscribers {
 		close(sub)
