@@ -431,7 +431,7 @@ function draftApp() {
         
         async appendLatestChatMessage() {
             try {
-                const response = await fetch('/api/chat');
+                const response = await fetch('/api/chat/list');
                 if (!response.ok) return;
                 const messages = await response.json();
                 if (!messages || messages.length === 0) return;
