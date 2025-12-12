@@ -15,7 +15,7 @@ This guide covers setting up and bootstrapping the PostgreSQL database for the J
 
 ## Prerequisites
 
-- PostgreSQL 12-18+ (or higher)
+- PostgreSQL 12-18+
 - Access to create databases and users
 - Go 1.24+ (for running the application)
 

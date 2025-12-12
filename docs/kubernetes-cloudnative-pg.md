@@ -28,7 +28,7 @@ This guide provides detailed instructions for deploying the Jellycat Fantasy Dra
 - **Monitoring**: Prometheus metrics out of the box
 - **Day-2 Operations**: Rolling updates, scaling, and maintenance
 
-This application is fully compatible with CloudNativePG and supports PostgreSQL 12-18 (and higher).
+This application is fully compatible with CloudNativePG and supports PostgreSQL 12-18+.
 
 ## PostgreSQL 18 Compatibility
 
