@@ -4,10 +4,10 @@ A realtime fantasy draft application for Jellycat plush toys, built with **Go**,
 
 ## Stack
 
-- **Backend**: Go 1.24+ with dual interface:
-  - HTTP/REST server for SSR pages and htmx frontend  
+- **Backend**: Go 1.25+ with dual interface:
+  - HTTP/REST server for SSR pages and htmx frontend
   - gRPC server for programmatic API access
-- **Frontend**: 
+- **Frontend**:
   - htmx for server-side HTML updates and dynamic interactions
   - Alpine.js for enriched client-side reactivity (search, filtering, UI state)
   - Server-Sent Events (SSE) for realtime updates
@@ -51,12 +51,14 @@ A realtime fantasy draft application for Jellycat plush toys, built with **Go**,
 ### Development Setup
 
 1. **Clone the repository**
+
    ```bash
    git clone https://github.com/Billy-Davies-2/jellycat-draft-ui.git
    cd jellycat-draft-ui
    ```
 
 2. **Build the application**
+
    ```bash
    make build
    # or
@@ -64,6 +66,7 @@ A realtime fantasy draft application for Jellycat plush toys, built with **Go**,
    ```
 
 3. **Configure environment variables**
+
    ```bash
    # Database (choose one)
    export DB_DRIVER=memory                                    # In-memory (no persistence)
@@ -71,21 +74,21 @@ A realtime fantasy draft application for Jellycat plush toys, built with **Go**,
    export SQLITE_FILE=dev.sqlite
    export DB_DRIVER=postgres                                  # PostgreSQL (production)
    export DATABASE_URL="postgres://user:pass@localhost/draft"
-   
+
    # Environment mode (optional - defaults to development)
    export ENVIRONMENT=development  # Uses mock NATS and mock ClickHouse
    export ENVIRONMENT=production   # Requires real NATS and ClickHouse
-   
+
    # NATS JetStream (only required in production mode)
    export NATS_URL="nats://localhost:4222"
    export NATS_SUBJECT="draft.events"
-   
+
    # ClickHouse (only required in production mode)
    export CLICKHOUSE_ADDR="localhost:9000"
    export CLICKHOUSE_DB="default"
    export CLICKHOUSE_USER="default"
    export CLICKHOUSE_PASSWORD=""
-   
+
    # Authentik OAuth2
    export AUTHENTIK_BASE_URL="https://auth.yourdomain.com"
    export AUTHENTIK_CLIENT_ID="your-client-id"
@@ -94,10 +97,11 @@ A realtime fantasy draft application for Jellycat plush toys, built with **Go**,
    ```
 
 4. **Run the server**
+
    ```bash
    ./jellycat-draft
    ```
-   
+
    In development mode (default), the application automatically uses:
    - **Mock NATS**: In-memory pub/sub simulation (no NATS server needed)
    - **Mock ClickHouse**: Static cuddle points data
@@ -146,6 +150,7 @@ FUZZTIME=5m make fuzz-test
 ### Mock Implementations for Testing
 
 Mock implementations are provided in `internal/mocks/` for use in tests only:
+
 - `MockPostgresDAL`: SQLite-based mock for PostgreSQL
 - `MockNATSPubSub`: In-memory pub/sub for NATS
 - `MockClickHouseClient`: Static data for ClickHouse
@@ -212,6 +217,7 @@ For complete design documentation, see [DESIGN_GUIDE.md](DESIGN_GUIDE.md).
 ## Testing
 
 ### Run All Tests
+
 ```bash
 make test
 # or
@@ -219,6 +225,7 @@ go test ./...
 ```
 
 ### Fuzz Testing
+
 The application includes comprehensive fuzz tests for both HTTP and gRPC endpoints:
 
 ```bash
@@ -236,6 +243,7 @@ FUZZTIME=5m make fuzz-test
 ```
 
 Individual fuzz tests:
+
 ```bash
 # HTTP endpoints
 go test -fuzz=FuzzHTTPDraftPick -fuzztime=30s ./internal/fuzz
@@ -298,26 +306,31 @@ The application is fully compatible with CloudNativePG (PostgreSQL 12-18+) witho
 ### HTTP/REST API
 
 #### Draft Operations
+
 - `GET /api/draft/state` - Get current draft state
 - `POST /api/draft/pick` - Draft a player
 - `POST /api/draft/reset` - Reset the draft
 
 #### Team Operations
+
 - `GET /api/teams` - List all teams
 - `POST /api/teams/add` - Create a new team
 - `POST /api/teams/reorder` - Reorder teams
 
 #### Player Operations
+
 - `POST /api/players/add` - Add a new player
 - `POST /api/players/points` - Update player points
 - `GET /api/players/profile` - Get player profile
 
 #### Chat Operations
+
 - `GET /api/chat/list` - Get all chat messages
 - `POST /api/chat/send` - Send a chat message
 - `POST /api/chat/react` - Add a reaction to a message
 
 #### Realtime
+
 - `GET /api/events` - Server-Sent Events stream for live updates
 
 ### gRPC API
@@ -345,6 +358,7 @@ See `proto/draft.proto` for complete API definitions.
 ### Using the gRPC API
 
 Example client (Go):
+
 ```go
 import (
     "context"
@@ -391,6 +405,7 @@ The application uses TailwindCSS v4 with a custom Jellycat-inspired design syste
 TailwindCSS styles are **automatically compiled** during the Docker build process. No manual steps needed!
 
 The Dockerfile:
+
 1. Downloads the TailwindCSS standalone CLI
 2. Compiles `static/css/input.css` → `static/css/styles.css`
 3. Includes the compiled CSS in the final image
@@ -411,6 +426,7 @@ chmod +x tailwindcss-linux-x64
 ### Custom Styles
 
 The design system includes:
+
 - **Custom color palette**: Soft pastels and football-themed accents
 - **Custom components**: `.btn-jellycat`, `.card-jellycat`, `.input-jellycat`, etc.
 - **Animations**: `.animate-float`, `.animate-bounce-slow`, `.animate-pulse-soft`
