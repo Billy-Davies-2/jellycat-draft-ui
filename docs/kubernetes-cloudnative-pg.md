@@ -5,6 +5,7 @@ This guide provides detailed instructions for deploying the Jellycat Fantasy Dra
 ## Table of Contents
 
 - [Overview](#overview)
+- [PostgreSQL 18 Compatibility](#postgresql-18-compatibility)
 - [PostgreSQL Optimizations](#postgresql-optimizations)
 - [Prerequisites](#prerequisites)
 - [Installing CloudNativePG Operator](#installing-cloudnativepg-operator)
@@ -27,7 +28,45 @@ This guide provides detailed instructions for deploying the Jellycat Fantasy Dra
 - **Monitoring**: Prometheus metrics out of the box
 - **Day-2 Operations**: Rolling updates, scaling, and maintenance
 
-This application is fully compatible with CloudNativePG and requires PostgreSQL 12 or higher.
+This application is fully compatible with CloudNativePG and supports PostgreSQL 12-18 (and higher).
+
+## PostgreSQL 18 Compatibility
+
+**Yes, this repository works with PostgreSQL 18!** 
+
+CloudNativePG supports PostgreSQL 18, and this application is fully compatible with it. All PostgreSQL features used by this application are standard, stable features that work seamlessly with PostgreSQL 18:
+
+### Features Used (All PostgreSQL 18 Compatible)
+
+- **JSONB Type & Operations**: For storing player data and chat emotes
+  - Functions: `jsonb_set()`, `COALESCE()`
+  - Introduced in PostgreSQL 9.4, stable across all versions
+  
+- **BYTEA Type**: For binary image storage
+  - Core PostgreSQL type, supported in all versions
+  
+- **Common Table Expressions (CTEs)**: For complex queries
+  - Standard SQL feature, fully supported
+  
+- **Standard SQL Features**: Transactions, indexes, foreign keys, parameterized queries
+  - All work identically across PostgreSQL 12-18+
+
+### Using PostgreSQL 18 with CloudNativePG
+
+To use PostgreSQL 18, simply update the `imageName` in your cluster configuration:
+
+```yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: jellycat-postgres
+spec:
+  instances: 3
+  imageName: ghcr.io/cloudnative-pg/postgresql:18  # PostgreSQL 18
+  # ... rest of configuration
+```
+
+**Note**: The `lib/pq` driver (v1.10.9) used by this application is compatible with all PostgreSQL versions from 9.x through 18+. No code changes are required.
 
 ## PostgreSQL Optimizations
 
@@ -129,8 +168,8 @@ spec:
   # Number of PostgreSQL instances
   instances: 3
   
-  # PostgreSQL version (12-17 supported)
-  imageName: ghcr.io/cloudnative-pg/postgresql:16.1
+  # PostgreSQL version (12-18+ supported)
+  imageName: ghcr.io/cloudnative-pg/postgresql:18
   
   # Storage configuration
   storage:
@@ -486,7 +525,7 @@ metadata:
   namespace: jellycat-draft
 spec:
   instances: 3
-  imageName: ghcr.io/cloudnative-pg/postgresql:16.1
+  imageName: ghcr.io/cloudnative-pg/postgresql:18
   
   storage:
     size: 10Gi
@@ -1079,6 +1118,6 @@ kubectl patch cluster jellycat-postgres -n jellycat-draft --type merge \
 
 ---
 
-**Note**: This application is fully compatible with CloudNativePG without any code changes. The standard PostgreSQL driver (`lib/pq`) and SQL features used work seamlessly with CloudNativePG-managed clusters.
+**Note**: This application is fully compatible with CloudNativePG and PostgreSQL 18 without any code changes. The standard PostgreSQL driver (`lib/pq`) and SQL features used (JSONB, BYTEA, CTEs, standard SQL) work seamlessly with all PostgreSQL versions from 12-18+ and CloudNativePG-managed clusters.
 
 For questions or issues, please refer to the [main README](../README.md) or open an issue on GitHub.
