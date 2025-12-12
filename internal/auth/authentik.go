@@ -314,9 +314,9 @@ func (m *MockAuth) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		ID: sessionID,
 		User: &User{
 			ID:       "dev-user-123",
-			Email:    "dev@jellycat.local",
-			Name:     "Dev User",
-			Username: "devuser",
+			Email:    "billy@jellycat.local",
+			Name:     "Billy",
+			Username: "Billy",
 			Groups:   []string{"users", "admins"},
 		},
 		CreatedAt: time.Now(),

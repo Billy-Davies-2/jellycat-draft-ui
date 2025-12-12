@@ -51,6 +51,9 @@ func (m *MemoryDAL) GetState() (*models.DraftState, error) {
 	copy(state.Teams, m.teams)
 	copy(state.Chat, m.chat)
 
+	// Calculate current pick number and whose turn it is
+	CalculateCurrentPick(state, state.Players)
+
 	return state, nil
 }
 

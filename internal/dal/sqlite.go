@@ -265,6 +265,9 @@ func (s *SQLiteDAL) GetState() (*models.DraftState, error) {
 		state.Chat = append(state.Chat, msg)
 	}
 
+	// Calculate current pick number and whose turn it is
+	CalculateCurrentPick(state, state.Players)
+
 	return state, nil
 }
 
