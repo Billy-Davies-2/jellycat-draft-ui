@@ -9,8 +9,14 @@ import (
 
 	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/dal"
 	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/handlers"
+	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/logger"
 	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/pubsub"
 )
+
+func init() {
+	// Initialize logger for tests
+	logger.Init()
+}
 
 // FuzzHTTPDraftPick fuzzes the HTTP draft pick endpoint
 func FuzzHTTPDraftPick(f *testing.F) {
@@ -105,7 +111,7 @@ func FuzzHTTPReorderTeams(f *testing.F) {
 	f.Add(`{"order":[]}`)
 	f.Add(`{"order":["invalid","999"]}`)
 
-	f.Fuzz(func(t *testing.F, data string) {
+	f.Fuzz(func(t *testing.T, data string) {
 		dal := dal.NewMemoryDAL()
 		ps := pubsub.New()
 		api := handlers.NewAPIHandlers(dal, ps)

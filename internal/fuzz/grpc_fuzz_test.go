@@ -6,9 +6,15 @@ import (
 
 	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/dal"
 	grpcserver "github.com/Billy-Davies-2/jellycat-draft-ui/internal/grpc"
+	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/logger"
 	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/pubsub"
 	pb "github.com/Billy-Davies-2/jellycat-draft-ui/proto"
 )
+
+func init() {
+	// Initialize logger for tests
+	logger.Init()
+}
 
 // FuzzGRPCDraftPlayer fuzzes the gRPC DraftPlayer endpoint
 func FuzzGRPCDraftPlayer(f *testing.F) {
