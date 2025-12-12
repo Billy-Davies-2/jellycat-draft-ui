@@ -168,29 +168,35 @@ func main() {
 		logger.Info("Skipping cuddle points sync (ClickHouse not configured)")
 	}
 
-	// Initialize authentication (Authentik OAuth2)
-	authentikBaseURL := os.Getenv("AUTHENTIK_BASE_URL")
-	authentikClientID := os.Getenv("AUTHENTIK_CLIENT_ID")
-	authentikClientSecret := os.Getenv("AUTHENTIK_CLIENT_SECRET")
-	authentikRedirectURL := os.Getenv("AUTHENTIK_REDIRECT_URL")
+	// Initialize authentication
+	// Use mock auth in development mode, Authentik OAuth2 in production
+	if environment == "" || environment == "development" {
+		logger.Info("Using mock authentication for local development (no Authentik server required)")
+		authProvider = auth.NewMockAuth()
+	} else {
+		authentikBaseURL := os.Getenv("AUTHENTIK_BASE_URL")
+		authentikClientID := os.Getenv("AUTHENTIK_CLIENT_ID")
+		authentikClientSecret := os.Getenv("AUTHENTIK_CLIENT_SECRET")
+		authentikRedirectURL := os.Getenv("AUTHENTIK_REDIRECT_URL")
 
-	if authentikBaseURL == "" || authentikClientID == "" || authentikClientSecret == "" {
-		logger.Error("AUTHENTIK_BASE_URL, AUTHENTIK_CLIENT_ID, and AUTHENTIK_CLIENT_SECRET environment variables are required")
-		log.Fatal("AUTHENTIK_BASE_URL, AUTHENTIK_CLIENT_ID, and AUTHENTIK_CLIENT_SECRET environment variables are required")
+		if authentikBaseURL == "" || authentikClientID == "" || authentikClientSecret == "" {
+			logger.Error("AUTHENTIK_BASE_URL, AUTHENTIK_CLIENT_ID, and AUTHENTIK_CLIENT_SECRET environment variables are required for production")
+			log.Fatal("AUTHENTIK_BASE_URL, AUTHENTIK_CLIENT_ID, and AUTHENTIK_CLIENT_SECRET environment variables are required for production")
+		}
+
+		if authentikRedirectURL == "" {
+			authentikRedirectURL = "http://localhost:3000/auth/callback"
+		}
+
+		authProvider = auth.NewAuthentikAuth(&auth.AuthentikConfig{
+			BaseURL:      authentikBaseURL,
+			ClientID:     authentikClientID,
+			ClientSecret: authentikClientSecret,
+			RedirectURL:  authentikRedirectURL,
+			Scopes:       []string{"openid", "profile", "email"},
+		})
+		logger.Info("Connected to Authentik", "url", authentikBaseURL)
 	}
-
-	if authentikRedirectURL == "" {
-		authentikRedirectURL = "http://localhost:3000/auth/callback"
-	}
-
-	authProvider = auth.NewAuthentikAuth(&auth.AuthentikConfig{
-		BaseURL:      authentikBaseURL,
-		ClientID:     authentikClientID,
-		ClientSecret: authentikClientSecret,
-		RedirectURL:  authentikRedirectURL,
-		Scopes:       []string{"openid", "profile", "email"},
-	})
-	logger.Info("Connected to Authentik", "url", authentikBaseURL)
 
 	// Load templates
 	var tmplErr error
