@@ -41,7 +41,7 @@ var (
 func main() {
 	// Initialize logger first
 	logger.Init()
-	
+
 	logger.Info("Starting Jellycat Draft microservice")
 
 	// Initialize database driver
