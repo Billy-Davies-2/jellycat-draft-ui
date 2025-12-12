@@ -354,6 +354,7 @@ function draftApp() {
             const eventSource = new EventSource('/api/events');
             const isUserTurn = {{ .IsUserTurn }};
             const currentTeamName = "{{ .CurrentTeamName }}";
+            const currentPick = {{ .CurrentPick }};
             
             eventSource.onmessage = (event) => {
                 try {
@@ -379,9 +380,9 @@ function draftApp() {
             if (currentTeamName) {
                 setTimeout(() => {
                     if (isUserTurn) {
-                        this.showNotification("🏈 It's YOUR turn to pick! Pick {{ .CurrentPick }}", 'success');
+                        this.showNotification("🏈 It's YOUR turn to pick! Pick " + currentPick, 'success');
                     } else {
-                        this.showNotification("🏈 Current turn: " + currentTeamName + " (Pick {{ .CurrentPick }})", 'info');
+                        this.showNotification("🏈 Current turn: " + currentTeamName + " (Pick " + currentPick + ")", 'info');
                     }
                 }, 500);
             }
