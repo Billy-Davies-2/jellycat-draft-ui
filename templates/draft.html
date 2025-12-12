@@ -1,5 +1,5 @@
 {{ define "content" }}
-<div class="min-h-screen relative" hx-ext="sse" sse-connect="/api/events" sse-swap="sse-event"
+<div class="min-h-screen relative"
      x-data="draftApp()" x-init="init()">
     <!-- Decorative background elements -->
     <div class="absolute top-20 right-20 text-6xl opacity-10 animate-float">🏈</div>
@@ -246,6 +246,20 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+    
+    <!-- Alpine.js: Notification component (inside main component scope) -->
+    <div x-show="notification" x-transition
+         class="fixed top-4 right-4 z-50 max-w-sm"
+         style="display: none;">
+        <div :class="{
+            'bg-green-100 border-green-400 text-green-700': notification && notification.type === 'success',
+            'bg-blue-100 border-blue-400 text-blue-700': notification && notification.type === 'info',
+            'bg-red-100 border-red-400 text-red-700': notification && notification.type === 'error'
+        }" 
+        class="border px-4 py-3 rounded-lg shadow-lg">
+            <p x-text="notification ? notification.message : ''"></p>
         </div>
     </div>
 </div>
@@ -528,19 +542,5 @@ function draftApp() {
     };
 }
 </script>
-
-<!-- Alpine.js: Notification component -->
-<div x-data="draftApp()" x-show="notification" x-transition
-     class="fixed top-4 right-4 z-50 max-w-sm"
-     style="display: none;">
-    <div :class="{
-        'bg-green-100 border-green-400 text-green-700': notification && notification.type === 'success',
-        'bg-blue-100 border-blue-400 text-blue-700': notification && notification.type === 'info',
-        'bg-red-100 border-red-400 text-red-700': notification && notification.type === 'error'
-    }" 
-    class="border px-4 py-3 rounded-lg shadow-lg">
-        <p x-text="notification ? notification.message : ''"></p>
-    </div>
-</div>
 
 {{ end }}
