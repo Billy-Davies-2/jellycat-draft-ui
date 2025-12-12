@@ -117,11 +117,13 @@ The application implements role-based access control using Authentik groups:
 - **Users**: All authenticated users can access the draft and team management features
 - **Admins**: Users in the `admins` group can access the admin panel at `/admin`
   - Add new Jellycat players
-  - Manage player points
+  - Manage player points and draft scores
   - Reset the draft
   - View all team data
 
 To grant admin access, add users to the `admins` group in your Authentik configuration.
+
+📖 **See [Admin Panel Guide](docs/admin-panel-guide.md) for detailed admin features and usage**
 
 ## Testing
 
@@ -276,6 +278,7 @@ docker run -p 3000:3000 -p 50051:50051 \
 - **Total Size**: ~20 MB (vs ~800 MB for Node.js)
 - **Security**: Minimal attack surface, no shell, no package manager
 - **Default Storage**: In-memory (for maximum portability with scratch)
+- **TailwindCSS**: Compiled during Docker build (styles.css included in image)
 
 **Note**: The scratch-based image has no writable filesystem. Use the memory driver or mount a volume for SQLite.
 
@@ -284,8 +287,11 @@ docker run -p 3000:3000 -p 50051:50051 \
 For production Kubernetes deployments with PostgreSQL using the CloudNativePG operator:
 
 - **[Kubernetes CloudNativePG Guide](docs/kubernetes-cloudnative-pg.md)** - Complete guide for deploying on Kubernetes with high availability PostgreSQL
+- **[Kubernetes Troubleshooting Guide](docs/kubernetes-troubleshooting.md)** - Solutions for common Kubernetes deployment issues (DNS timeouts, connection errors, etc.)
 
 The application is fully compatible with CloudNativePG (PostgreSQL 12-17) without any code modifications.
+
+**Important**: The application includes automatic retry logic (5 retries with 60s timeout each) to handle DNS resolution delays during Kubernetes pod startup. Ensure your DATABASE_URL includes `connect_timeout=60`.
 
 ## API Endpoints
 
@@ -334,6 +340,8 @@ The gRPC service provides the same functionality with type-safe interfaces:
 
 See `proto/draft.proto` for complete API definitions.
 
+📖 **See [gRPC and NATS Architecture](docs/grpc-nats-architecture.md) for details on how gRPC uses NATS for real-time chat and event streaming**
+
 ### Using the gRPC API
 
 Example client (Go):
@@ -351,6 +359,17 @@ client := pb.NewDraftServiceClient(conn)
 state, _ := client.GetState(context.Background(), &pb.Empty{})
 ```
 
+### Why gRPC is Included
+
+The gRPC server is **essential** for this application because:
+
+- ✅ **NATS Event Streaming**: `StreamEvents()` provides real-time updates via NATS pub/sub
+- ✅ **Chat Integration**: Chat messages use NATS for distributed messaging
+- ✅ **Programmatic API**: Type-safe API for external services and microservices
+- ✅ **Dual Interface**: HTTP for browsers, gRPC for services and programmatic access
+
+**Do not remove gRPC** - it's actively used for NATS-based real-time messaging and event streaming.
+
 ## Regenerating Protocol Buffers
 
 If you modify `proto/draft.proto`:
@@ -367,7 +386,18 @@ protoc --go_out=. --go_opt=paths=source_relative \
 
 The application uses TailwindCSS v4 with a custom Jellycat-inspired design system.
 
-If you modify TailwindCSS styles in `static/css/input.css` or `tailwind.config.js`:
+### Docker Build (Automatic)
+
+TailwindCSS styles are **automatically compiled** during the Docker build process. No manual steps needed!
+
+The Dockerfile:
+1. Downloads the TailwindCSS standalone CLI
+2. Compiles `static/css/input.css` → `static/css/styles.css`
+3. Includes the compiled CSS in the final image
+
+### Local Development (Manual)
+
+If you modify TailwindCSS styles in `static/css/input.css` or `tailwind.config.js` locally:
 
 ```bash
 # Download TailwindCSS CLI (one time)

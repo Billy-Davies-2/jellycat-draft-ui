@@ -249,8 +249,27 @@ CloudNativePG provides the following service endpoints:
 For this application, use the **read-write service** (`-rw`):
 
 ```
-postgres://jellycatuser:[PASSWORD]@jellycat-postgres-rw.jellycat-draft.svc.cluster.local:5432/jellycatdraft?sslmode=require
+postgres://jellycatuser:[PASSWORD]@jellycat-postgres-rw.jellycat-draft.svc.cluster.local:5432/jellycatdraft?sslmode=require&connect_timeout=60
 ```
+
+**Important Connection Parameters**:
+- `sslmode=require` - Enforces SSL/TLS connections (required for CloudNativePG)
+- `connect_timeout=60` - Sets 60-second timeout for initial connection (recommended for Kubernetes DNS resolution delays)
+
+**Example for cluster named `jellycat-draft-db`**:
+```
+postgres://jellycat-draft:PASSWORD@jellycat-draft-db-rw.default.svc.cluster.local:5432/jellycat-draft?sslmode=require&connect_timeout=60
+```
+
+**Password Encoding**: If your password contains special characters, ensure they are URL-encoded:
+- `/` becomes `%2F`
+- `@` becomes `%40`
+- `=` becomes `%3D`
+- `:` becomes `%3A`
+
+**Note**: Replace cluster name, namespace, database name, and credentials based on your CloudNativePG cluster configuration:
+- Cluster name `jellycat-postgres` → service name `jellycat-postgres-rw`
+- Cluster name `jellycat-draft-db` → service name `jellycat-draft-db-rw`
 
 ## Deploying the Application
 
@@ -800,25 +819,54 @@ kubectl get storageclass
 kubectl describe nodes | grep -A 5 "Allocated resources"
 ```
 
-### Connection Refused
+### Connection Refused / DNS Timeout
 
-**Symptoms**: Application can't connect to database
+**Symptoms**: Application can't connect to database, DNS lookup timeouts like `lookup jellycat-postgres-rw.default.svc.cluster.local on 10.43.0.10:53: i/o timeout`
+
+**Common Causes**:
+1. **Incorrect service name**: Ensure you're using the correct CloudNativePG service name
+2. **DNS propagation delay**: DNS records may take time to propagate in Kubernetes
+3. **Network policies**: Restrictive network policies blocking DNS or database traffic
+4. **CoreDNS issues**: DNS server issues in the cluster
 
 **Solutions**:
 ```bash
-# Verify service exists
-kubectl get svc -n jellycat-draft | grep postgres
+# 1. Verify the correct service name from CloudNativePG cluster
+kubectl get cluster <cluster-name> -n <namespace> -o yaml | grep writeService
+# Output example: writeService: jellycat-draft-db-rw
 
-# Test connectivity from application pod
+# 2. Verify service exists and has endpoints
+kubectl get svc -n jellycat-draft | grep postgres
+kubectl get endpoints -n jellycat-draft | grep postgres
+
+# 3. Check if DNS is resolving from the application pod
+kubectl exec -it <app-pod> -n jellycat-draft -- \
+  nslookup jellycat-postgres-rw.jellycat-draft.svc.cluster.local
+
+# 4. Test connectivity from application pod
 kubectl exec -it <app-pod> -n jellycat-draft -- \
   nc -zv jellycat-postgres-rw.jellycat-draft.svc.cluster.local 5432
 
-# Check database logs
+# 5. Check database logs
 kubectl logs jellycat-postgres-1 -n jellycat-draft
 
-# Verify secret exists and is correct
-kubectl get secret jellycat-postgres-app -n jellycat-draft -o yaml
+# 6. Verify DATABASE_URL format in secret
+# Correct format: postgres://user:password@service-name.namespace.svc.cluster.local:5432/database?sslmode=require&connect_timeout=60
+kubectl get secret jellycat-postgres-app -n jellycat-draft \
+  -o jsonpath='{.data.uri}' | base64 -d
+echo
+
+# 7. If using a custom secret, ensure DATABASE_URL includes connect_timeout
+# Example: postgres://jellycatuser:password@jellycat-draft-db-rw.default.svc.cluster.local:5432/jellycat-draft?sslmode=require&connect_timeout=60
+
+# 8. Check CoreDNS logs for DNS issues
+kubectl logs -n kube-system -l k8s-app=kube-dns --tail=50
+
+# 9. Verify network policies aren't blocking traffic
+kubectl get networkpolicies -n jellycat-draft
 ```
+
+**Fix**: The application now includes retry logic with 60-second timeout per attempt and up to 5 retries to handle DNS propagation delays in Kubernetes. Ensure your DATABASE_URL includes `connect_timeout=60` parameter.
 
 ### Authentication Failed
 
