@@ -1,8 +1,9 @@
 package mocks
 
 import (
-	"log"
 	"math/rand"
+
+	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/logger"
 )
 
 // MockClickHouseClient provides a mock ClickHouse client for local development
@@ -12,7 +13,7 @@ type MockClickHouseClient struct {
 
 // NewMockClickHouseClient creates a mock ClickHouse client
 func NewMockClickHouseClient() *MockClickHouseClient {
-	log.Println("Using MOCK ClickHouse client for local development")
+	logger.Info("Using MOCK ClickHouse client for local development")
 
 	return &MockClickHouseClient{
 		basePoints: map[string]int{
@@ -69,11 +70,11 @@ func (m *MockClickHouseClient) SyncCuddlePoints(updateFunc func(playerID string,
 
 	for playerID, points := range allPoints {
 		if err := updateFunc(playerID, points); err != nil {
-			log.Printf("Failed to update points for %s: %v", playerID, err)
+			logger.Error("Mock ClickHouse: Failed to update points", "player_id", playerID, "error", err)
 		}
 	}
 
-	log.Println("Mock ClickHouse: Synced cuddle points for all Jellycats")
+	logger.Info("Mock ClickHouse: Synced cuddle points for all Jellycats")
 	return nil
 }
 

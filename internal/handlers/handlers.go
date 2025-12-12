@@ -3,12 +3,12 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"math"
 	"net/http"
 	"time"
 
 	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/dal"
+	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/logger"
 	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/models"
 	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/pubsub"
 )
@@ -29,8 +29,10 @@ func NewAPIHandlers(dal dal.DraftDAL, ps *pubsub.PubSub) *APIHandlers {
 
 // GetDraftState returns the current draft state
 func (h *APIHandlers) GetDraftState(w http.ResponseWriter, r *http.Request) {
+	logger.Debug("Getting draft state")
 	state, err := h.dal.GetState()
 	if err != nil {
+		logger.Error("Failed to get draft state", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -52,11 +54,14 @@ func (h *APIHandlers) DraftPick(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		logger.Warn("Failed to decode draft pick request", "error", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
+	logger.Info("Drafting player", "player_id", req.PlayerID, "team_id", req.TeamID)
 	if err := h.dal.DraftPlayer(req.PlayerID, req.TeamID); err != nil {
+		logger.Error("Failed to draft player", "error", err, "player_id", req.PlayerID, "team_id", req.TeamID)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -81,7 +86,9 @@ func (h *APIHandlers) ResetDraft(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	logger.Info("Resetting draft")
 	if err := h.dal.Reset(); err != nil {
+		logger.Error("Failed to reset draft", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -394,7 +401,7 @@ func (h *APIHandlers) EventsSSE(w http.ResponseWriter, r *http.Request) {
 				f.Flush()
 			}
 		case <-r.Context().Done():
-			log.Println("SSE client disconnected")
+			logger.Debug("SSE client disconnected")
 			return
 		case <-time.After(30 * time.Second):
 			// Send keepalive ping

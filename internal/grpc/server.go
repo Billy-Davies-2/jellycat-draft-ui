@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/dal"
+	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/logger"
 	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/models"
 	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/pubsub"
 	pb "github.com/Billy-Davies-2/jellycat-draft-ui/proto"
@@ -28,8 +29,10 @@ func NewServer(dal dal.DraftDAL, ps *pubsub.PubSub) *Server {
 
 // GetState returns the current draft state
 func (s *Server) GetState(ctx context.Context, req *pb.Empty) (*pb.DraftState, error) {
+	logger.Debug("gRPC: Getting draft state")
 	state, err := s.dal.GetState()
 	if err != nil {
+		logger.Error("gRPC: Failed to get draft state", "error", err)
 		return nil, err
 	}
 
@@ -38,8 +41,10 @@ func (s *Server) GetState(ctx context.Context, req *pb.Empty) (*pb.DraftState, e
 
 // DraftPlayer drafts a player to a team
 func (s *Server) DraftPlayer(ctx context.Context, req *pb.DraftPlayerRequest) (*pb.DraftPlayerResponse, error) {
+	logger.Info("gRPC: Drafting player", "player_id", req.PlayerId, "team_id", req.TeamId)
 	err := s.dal.DraftPlayer(req.PlayerId, req.TeamId)
 	if err != nil {
+		logger.Error("gRPC: Failed to draft player", "error", err, "player_id", req.PlayerId, "team_id", req.TeamId)
 		return &pb.DraftPlayerResponse{Success: false}, err
 	}
 
@@ -56,8 +61,10 @@ func (s *Server) DraftPlayer(ctx context.Context, req *pb.DraftPlayerRequest) (*
 
 // ResetDraft resets the draft
 func (s *Server) ResetDraft(ctx context.Context, req *pb.Empty) (*pb.Empty, error) {
+	logger.Info("gRPC: Resetting draft")
 	err := s.dal.Reset()
 	if err != nil {
+		logger.Error("gRPC: Failed to reset draft", "error", err)
 		return nil, err
 	}
 
@@ -257,6 +264,7 @@ func (s *Server) AddReaction(ctx context.Context, req *pb.AddReactionRequest) (*
 
 // StreamEvents streams events to clients
 func (s *Server) StreamEvents(req *pb.Empty, stream pb.DraftService_StreamEventsServer) error {
+	logger.Debug("gRPC: New client connected to event stream")
 	eventChan := s.pubsub.Subscribe()
 	defer s.pubsub.Unsubscribe(eventChan)
 
@@ -272,9 +280,11 @@ func (s *Server) StreamEvents(req *pb.Empty, stream pb.DraftService_StreamEvents
 				Payload: payload,
 			}
 			if err := stream.Send(pbEvent); err != nil {
+				logger.Error("gRPC: Failed to send event to stream", "error", err)
 				return err
 			}
 		case <-stream.Context().Done():
+			logger.Debug("gRPC: Client disconnected from event stream")
 			return nil
 		}
 	}

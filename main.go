@@ -15,6 +15,7 @@ import (
 	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/dal"
 	grpcserver "github.com/Billy-Davies-2/jellycat-draft-ui/internal/grpc"
 	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/handlers"
+	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/logger"
 	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/pubsub"
 	pb "github.com/Billy-Davies-2/jellycat-draft-ui/proto"
 	"google.golang.org/grpc"
@@ -38,7 +39,10 @@ var (
 )
 
 func main() {
-	log.Println("Starting Jellycat Draft microservice")
+	// Initialize logger first
+	logger.Init()
+	
+	logger.Info("Starting Jellycat Draft microservice")
 
 	// Initialize database driver
 	dbDriver := os.Getenv("DB_DRIVER")
@@ -50,7 +54,7 @@ func main() {
 	switch dbDriver {
 	case "memory":
 		dataStore = dal.NewMemoryDAL()
-		log.Println("Using in-memory data store")
+		logger.Info("Using in-memory data store")
 	case "sqlite":
 		sqliteFile := os.Getenv("SQLITE_FILE")
 		if sqliteFile == "" {
@@ -58,20 +62,24 @@ func main() {
 		}
 		dataStore, err = dal.NewSQLiteDAL(sqliteFile)
 		if err != nil {
+			logger.Error("Failed to initialize SQLite", "error", err)
 			log.Fatalf("Failed to initialize SQLite: %v", err)
 		}
-		log.Printf("Connected to SQLite database at %s", sqliteFile)
+		logger.Info("Connected to SQLite database", "file", sqliteFile)
 	case "postgres":
 		dbConnString := os.Getenv("DATABASE_URL")
 		if dbConnString == "" {
+			logger.Error("DATABASE_URL environment variable is required for postgres driver")
 			log.Fatal("DATABASE_URL environment variable is required for postgres driver")
 		}
 		dataStore, err = dal.NewPostgresDAL(dbConnString)
 		if err != nil {
+			logger.Error("Failed to initialize Postgres", "error", err)
 			log.Fatalf("Failed to initialize Postgres: %v", err)
 		}
-		log.Println("Connected to Postgres database")
+		logger.Info("Connected to Postgres database")
 	default:
+		logger.Error("Unknown DB_DRIVER", "driver", dbDriver)
 		log.Fatalf("Unknown DB_DRIVER: %s (valid: memory, sqlite, postgres)", dbDriver)
 	}
 
@@ -94,20 +102,22 @@ func main() {
 
 	// Use mock NATS in development mode, real NATS in production
 	if environment == "" || environment == "development" {
-		log.Println("Using mock NATS pub/sub for local development (no NATS server required)")
+		logger.Info("Using mock NATS pub/sub for local development (no NATS server required)")
 		mockNats, err := pubsub.NewMockNATSPubSub(natsURL, natsSubject)
 		if err != nil {
+			logger.Error("Failed to initialize mock NATS", "error", err)
 			log.Fatalf("Failed to initialize mock NATS: %v", err)
 		}
 		natsPubSub = mockNats
 	} else {
-		log.Println("Using real NATS JetStream for production")
+		logger.Info("Using real NATS JetStream for production")
 		realNats, err := pubsub.NewNATSPubSub(natsURL, natsSubject)
 		if err != nil {
+			logger.Error("Failed to initialize NATS", "error", err)
 			log.Fatalf("Failed to initialize NATS: %v", err)
 		}
 		natsPubSub = realNats
-		log.Printf("Connected to NATS at %s", natsURL)
+		logger.Info("Connected to NATS", "url", natsURL)
 	}
 
 	ps = natsPubSub
@@ -115,7 +125,7 @@ func main() {
 	// Initialize ClickHouse client (or mock in development)
 	var chErr error
 	if environment == "" || environment == "development" {
-		log.Println("Using mock ClickHouse for local development (no ClickHouse server required)")
+		logger.Info("Using mock ClickHouse for local development (no ClickHouse server required)")
 		// In development, we'll just skip ClickHouse and use static points
 		chClient = nil
 	} else {
@@ -135,9 +145,10 @@ func main() {
 
 		chClient, chErr = clickhouse.NewClient(chAddr, chDB, chUser, chPass)
 		if chErr != nil {
+			logger.Error("Failed to initialize ClickHouse", "error", chErr, "address", chAddr)
 			log.Fatalf("Failed to initialize ClickHouse: %v", chErr)
 		}
-		log.Printf("Connected to ClickHouse at %s", chAddr)
+		logger.Info("Connected to ClickHouse", "address", chAddr, "database", chDB)
 	}
 
 	// Start periodic cuddle points sync (only in production with ClickHouse)
@@ -154,7 +165,7 @@ func main() {
 			}
 		}()
 	} else {
-		log.Println("Skipping cuddle points sync (ClickHouse not configured)")
+		logger.Info("Skipping cuddle points sync (ClickHouse not configured)")
 	}
 
 	// Initialize authentication (Authentik OAuth2)
@@ -164,6 +175,7 @@ func main() {
 	authentikRedirectURL := os.Getenv("AUTHENTIK_REDIRECT_URL")
 
 	if authentikBaseURL == "" || authentikClientID == "" || authentikClientSecret == "" {
+		logger.Error("AUTHENTIK_BASE_URL, AUTHENTIK_CLIENT_ID, and AUTHENTIK_CLIENT_SECRET environment variables are required")
 		log.Fatal("AUTHENTIK_BASE_URL, AUTHENTIK_CLIENT_ID, and AUTHENTIK_CLIENT_SECRET environment variables are required")
 	}
 
@@ -178,15 +190,16 @@ func main() {
 		RedirectURL:  authentikRedirectURL,
 		Scopes:       []string{"openid", "profile", "email"},
 	})
-	log.Printf("Connected to Authentik at %s", authentikBaseURL)
+	logger.Info("Connected to Authentik", "url", authentikBaseURL)
 
 	// Load templates
 	var tmplErr error
 	templates, tmplErr = template.ParseGlob("templates/*.html")
 	if tmplErr != nil {
+		logger.Error("Failed to parse templates", "error", tmplErr)
 		log.Fatalf("Failed to parse templates: %v", tmplErr)
 	}
-	log.Printf("Templates loaded successfully")
+	logger.Info("Templates loaded successfully")
 
 	// Start gRPC server in a goroutine
 	grpcPort := os.Getenv("GRPC_PORT")
@@ -197,14 +210,16 @@ func main() {
 	go func() {
 		lis, err := net.Listen("tcp", "0.0.0.0:"+grpcPort)
 		if err != nil {
+			logger.Error("Failed to listen for gRPC", "error", err, "port", grpcPort)
 			log.Fatalf("Failed to listen for gRPC: %v", err)
 		}
 
 		grpcServer := grpc.NewServer()
 		pb.RegisterDraftServiceServer(grpcServer, grpcserver.NewServer(dataStore, convertPubSub(ps)))
 
-		log.Printf("gRPC server starting on 0.0.0.0:%s", grpcPort)
+		logger.Info("gRPC server starting", "address", "0.0.0.0:"+grpcPort)
 		if err := grpcServer.Serve(lis); err != nil {
+			logger.Error("Failed to serve gRPC", "error", err)
 			log.Fatalf("Failed to serve gRPC: %v", err)
 		}
 	}()
@@ -268,8 +283,9 @@ func main() {
 	}
 
 	addr := "0.0.0.0:" + port
-	log.Printf("Server starting on %s", addr)
+	logger.Info("Server starting", "address", addr)
 	if err := http.ListenAndServe(addr, mux); err != nil {
+		logger.Error("Server failed", "error", err)
 		log.Fatal(err)
 	}
 }
@@ -506,7 +522,7 @@ func serveImageHandler(w http.ResponseWriter, r *http.Request) {
 
 // syncCuddlePoints syncs cuddle points from ClickHouse
 func syncCuddlePoints() {
-	log.Println("Syncing cuddle points from ClickHouse...")
+	logger.Info("Syncing cuddle points from ClickHouse")
 	ctx := context.Background()
 	_ = ctx // Context ready for future use
 
@@ -515,9 +531,9 @@ func syncCuddlePoints() {
 		return err
 	})
 	if err != nil {
-		log.Printf("Failed to sync cuddle points: %v", err)
+		logger.Error("Failed to sync cuddle points", "error", err)
 	} else {
-		log.Println("Cuddle points synced successfully")
+		logger.Info("Cuddle points synced successfully")
 	}
 }
 
