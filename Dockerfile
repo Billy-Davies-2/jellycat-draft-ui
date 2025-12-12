@@ -2,7 +2,7 @@
 
 # Multi-stage Dockerfile for Go application
 
-FROM golang:1.24-alpine AS builder
+FROM golang:1.25-alpine AS builder
 WORKDIR /app
 
 # Update CA certificates and install build dependencies for static compilation
@@ -18,10 +18,10 @@ COPY . .
 # Build the application as a static binary
 # Note: We link statically against musl and sqlite
 RUN CGO_ENABLED=1 GOOS=linux go build \
-    -a \
-    -ldflags '-linkmode external -extldflags "-static"' \
-    -tags netgo,osusergo \
-    -o jellycat-draft main.go
+  -a \
+  -ldflags '-linkmode external -extldflags "-static"' \
+  -tags netgo,osusergo \
+  -o jellycat-draft main.go
 
 FROM scratch
 WORKDIR /app
@@ -38,8 +38,8 @@ COPY --from=builder /app/static ./static
 # Note: Using memory driver by default since scratch has no writable filesystem
 # For SQLite, mount a volume at runtime
 ENV PORT=3000 \
-    GRPC_PORT=50051 \
-    DB_DRIVER=memory
+  GRPC_PORT=50051 \
+  DB_DRIVER=memory
 
 EXPOSE 3000 50051
 
