@@ -265,6 +265,36 @@ func (s *SQLiteDAL) GetState() (*models.DraftState, error) {
 		state.Chat = append(state.Chat, msg)
 	}
 
+	// Calculate current pick number and whose turn it is
+	totalDrafted := 0
+	for _, player := range state.Players {
+		if player.Drafted {
+			totalDrafted++
+		}
+	}
+	state.CurrentPick = totalDrafted + 1
+
+	// Determine current team (snake draft style)
+	if len(state.Teams) > 0 {
+		teamCount := len(state.Teams)
+		round := totalDrafted / teamCount
+		pickInRound := totalDrafted % teamCount
+		
+		var teamIndex int
+		if round%2 == 0 {
+			// Even rounds go forward (0, 1, 2, ...)
+			teamIndex = pickInRound
+		} else {
+			// Odd rounds go backward (... 2, 1, 0)
+			teamIndex = teamCount - 1 - pickInRound
+		}
+		
+		if teamIndex < len(state.Teams) {
+			state.CurrentTeamID = state.Teams[teamIndex].ID
+			state.CurrentTeamName = state.Teams[teamIndex].Name
+		}
+	}
+
 	return state, nil
 }
 

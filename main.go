@@ -340,12 +340,33 @@ func draftHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := auth.GetUser(r)
+	
+	// Find if user owns the team with current pick
+	var userTeamID string
+	var isUserTurn bool
+	if user != nil {
+		for _, team := range state.Teams {
+			if team.Owner == user.Username || team.Owner == user.Name {
+				userTeamID = team.ID
+				if team.ID == state.CurrentTeamID {
+					isUserTurn = true
+				}
+				break
+			}
+		}
+	}
+	
 	data := map[string]interface{}{
-		"Players": state.Players,
-		"Teams":   state.Teams,
-		"Chat":    state.Chat,
-		"User":    user,
-		"IsAdmin": auth.IsAdmin(user),
+		"Players":         state.Players,
+		"Teams":           state.Teams,
+		"Chat":            state.Chat,
+		"User":            user,
+		"IsAdmin":         auth.IsAdmin(user),
+		"CurrentPick":     state.CurrentPick,
+		"CurrentTeamID":   state.CurrentTeamID,
+		"CurrentTeamName": state.CurrentTeamName,
+		"UserTeamID":      userTeamID,
+		"IsUserTurn":      isUserTurn,
 	}
 
 	tmpl, err := template.ParseFiles("templates/base.html", "templates/draft.html")

@@ -45,9 +45,12 @@ type ChatMessage struct {
 
 // DraftState represents the complete state of the draft
 type DraftState struct {
-	Players []Player      `json:"players"`
-	Teams   []Team        `json:"teams"`
-	Chat    []ChatMessage `json:"chat"`
+	Players         []Player      `json:"players"`
+	Teams           []Team        `json:"teams"`
+	Chat            []ChatMessage `json:"chat"`
+	CurrentPick     int           `json:"currentPick"`     // Current pick number (1-based)
+	CurrentTeamID   string        `json:"currentTeamId"`   // ID of team with current pick
+	CurrentTeamName string        `json:"currentTeamName"` // Name of team with current pick
 }
 
 // PlayerProfile represents extended player information

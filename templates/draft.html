@@ -1,5 +1,5 @@
 {{ define "content" }}
-<div class="min-h-screen relative" hx-ext="sse" sse-connect="/api/events" sse-swap="sse-event" hx-trigger="sse-event from:body" hx-get="/api/draft/state" hx-target="#draft-content" hx-swap="none"
+<div class="min-h-screen relative" hx-ext="sse" sse-connect="/api/events" sse-swap="sse-event"
      x-data="draftApp()" x-init="init()">
     <!-- Decorative background elements -->
     <div class="absolute top-20 right-20 text-6xl opacity-10 animate-float">🏈</div>
@@ -14,7 +14,7 @@
                     <h1 class="text-3xl font-display font-bold text-gradient-jellycat">
                         Jellycat Fantasy Draft
                     </h1>
-                    <div class="text-3xl animate-float">⚽</div>
+                    <div class="text-3xl animate-float">🏈</div>
                 </div>
                 <div class="flex items-center gap-6">
                     <!-- Alpine.js: Filter controls -->
@@ -35,7 +35,13 @@
                         <svg class="w-5 h-5 text-pink-600 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                         </svg>
-                        <span class="font-semibold text-gray-700 font-display" id="pick-counter">Draft in Progress</span>
+                        <span class="font-semibold text-gray-700 font-display" id="pick-counter">
+                            {{ if .CurrentTeamName }}
+                                Pick {{ .CurrentPick }}: {{ .CurrentTeamName }}'s turn 🏈
+                            {{ else }}
+                                Draft in Progress
+                            {{ end }}
+                        </span>
                     </div>
                 </div>
             </div>
@@ -292,10 +298,19 @@ function selectPlayer(id, name, image, team, position, points) {
 function draftPlayer() {
     if (!selectedPlayer) return;
     
-    // Use hardcoded teams from template data
-    const teams = [{{ range $i, $t := .Teams }}{{ if $i }},{{ end }}"{{ $t.ID }}"{{ end }}];
-    if (teams.length > 0) {
-        submitDraft(teams[currentTeamIndex % teams.length]);
+    // In interactive mode, use the current team's turn
+    const currentTeamID = "{{ .CurrentTeamID }}";
+    const userTeamID = "{{ .UserTeamID }}";
+    
+    // Use the current team's turn if available, otherwise fall back to round-robin
+    let teamID = currentTeamID;
+    if (!teamID) {
+        const teams = [{{ range $i, $t := .Teams }}{{ if $i }},{{ end }}"{{ $t.ID }}"{{ end }}];
+        teamID = teams[currentTeamIndex % teams.length];
+    }
+    
+    if (teamID) {
+        submitDraft(teamID);
     }
 }
 
@@ -335,10 +350,41 @@ function draftApp() {
         notification: null,
         
         init() {
-            // Listen for SSE events and show notifications
-            document.addEventListener('htmx:afterSwap', () => {
-                this.showNotification('Draft updated!', 'success');
-            });
+            // Listen for SSE events and reload page to show updates
+            const eventSource = new EventSource('/api/events');
+            const isUserTurn = {{ .IsUserTurn }};
+            const currentTeamName = "{{ .CurrentTeamName }}";
+            
+            eventSource.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'draft:pick') {
+                        // Show a brief notification before reloading
+                        this.showNotification('Player drafted! Updating...', 'success');
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 800);
+                    } else if (data.type === 'draft:reset') {
+                        this.showNotification('Draft reset!', 'info');
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 800);
+                    }
+                } catch (e) {
+                    // Ignore parse errors for keepalive messages
+                }
+            };
+            
+            // Show turn notification on page load (in development mode)
+            if (currentTeamName) {
+                setTimeout(() => {
+                    if (isUserTurn) {
+                        this.showNotification("🏈 It's YOUR turn to pick! Pick {{ .CurrentPick }}", 'success');
+                    } else {
+                        this.showNotification("🏈 Current turn: " + currentTeamName + " (Pick {{ .CurrentPick }})", 'info');
+                    }
+                }, 500);
+            }
         },
         
         filterPlayers() {
