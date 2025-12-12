@@ -340,7 +340,7 @@ func draftHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := auth.GetUser(r)
-	
+
 	// Find if user owns the team with current pick
 	var userTeamID string
 	var isUserTurn bool
@@ -355,7 +355,7 @@ func draftHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	
+
 	data := map[string]interface{}{
 		"Players":         state.Players,
 		"Teams":           state.Teams,
