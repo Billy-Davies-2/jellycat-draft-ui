@@ -367,6 +367,81 @@ func (p *PostgresDAL) AddPlayer(player *models.Player) (*models.Player, error) {
 	return player, err
 }
 
+func (p *PostgresDAL) UpdatePlayer(player *models.Player) (*models.Player, error) {
+	// Cap cuddle points at 100
+	if player.CuddlePoints > 100 {
+		player.CuddlePoints = 100
+	}
+	if player.CuddlePoints < 0 {
+		player.CuddlePoints = 0
+	}
+
+	// Check if player exists and get current data
+	var drafted bool
+	var currentPoints int
+	err := p.db.QueryRow(`SELECT drafted, points FROM players WHERE id = $1`, player.ID).Scan(&drafted, &currentPoints)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("player not found")
+		}
+		return nil, err
+	}
+
+	// Preserve points if not provided
+	pointsToUpdate := player.Points
+	if pointsToUpdate == 0 {
+		pointsToUpdate = currentPoints
+	}
+
+	_, err = p.db.Exec(`
+		UPDATE players 
+		SET name = $1, position = $2, team = $3, points = $4, cuddle_points = $5, tier = $6, image = $7, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $8
+	`, player.Name, player.Position, player.Team, pointsToUpdate, player.CuddlePoints, player.Tier, player.Image, player.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Also update in team_players if player is drafted
+	if drafted {
+		player.Points = pointsToUpdate
+		playerJSON, _ := json.Marshal(player)
+		_, err = p.db.Exec(`
+			UPDATE team_players 
+			SET player_data = $1
+			WHERE player_id = $2
+		`, playerJSON, player.ID)
+	}
+
+	// Get updated player
+	var updatedPlayer models.Player
+	err = p.db.QueryRow(`
+		SELECT id, name, position, team, points, cuddle_points, tier, drafted, COALESCE(drafted_by, ''), image
+		FROM players WHERE id = $1
+	`, player.ID).Scan(&updatedPlayer.ID, &updatedPlayer.Name, &updatedPlayer.Position, &updatedPlayer.Team, &updatedPlayer.Points, &updatedPlayer.CuddlePoints, &updatedPlayer.Tier, &updatedPlayer.Drafted, &updatedPlayer.DraftedBy, &updatedPlayer.Image)
+
+	return &updatedPlayer, err
+}
+
+func (p *PostgresDAL) DeletePlayer(id string) error {
+	// Check if player exists and is not drafted
+	var drafted bool
+	err := p.db.QueryRow(`SELECT drafted FROM players WHERE id = $1`, id).Scan(&drafted)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("player not found")
+		}
+		return err
+	}
+
+	if drafted {
+		return fmt.Errorf("cannot delete a drafted player")
+	}
+
+	_, err = p.db.Exec(`DELETE FROM players WHERE id = $1`, id)
+	return err
+}
+
 func (p *PostgresDAL) SetPlayerPoints(id string, points int) (*models.Player, error) {
 	_, err := p.db.Exec(`UPDATE players SET points = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`, points, id)
 	if err != nil {

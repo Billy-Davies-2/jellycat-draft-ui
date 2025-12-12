@@ -266,6 +266,8 @@ func main() {
 
 	// Players API
 	mux.HandleFunc("/api/players/add", api.AddPlayer)
+	mux.HandleFunc("/api/players/update", api.UpdatePlayer)
+	mux.HandleFunc("/api/players/delete", api.DeletePlayer)
 	mux.HandleFunc("/api/players/points", api.SetPlayerPoints)
 	mux.HandleFunc("/api/players/profile", api.GetPlayerProfile)
 

@@ -205,6 +205,81 @@ func (h *APIHandlers) AddPlayer(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
+// UpdatePlayer updates an existing player
+func (h *APIHandlers) UpdatePlayer(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodPut {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var player models.Player
+	if err := json.NewDecoder(r.Body).Decode(&player); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if player.ID == "" {
+		http.Error(w, "player ID is required", http.StatusBadRequest)
+		return
+	}
+
+	result, err := h.dal.UpdatePlayer(&player)
+	if err != nil {
+		logger.Error("Failed to update player", "error", err, "player_id", player.ID)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	h.pubsub.Publish(pubsub.Event{
+		Type: "players:update",
+		Payload: map[string]interface{}{
+			"id": result.ID,
+		},
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+// DeletePlayer deletes an existing player
+func (h *APIHandlers) DeletePlayer(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodDelete {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		ID string `json:"id"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if req.ID == "" {
+		http.Error(w, "player ID is required", http.StatusBadRequest)
+		return
+	}
+
+	err := h.dal.DeletePlayer(req.ID)
+	if err != nil {
+		logger.Error("Failed to delete player", "error", err, "player_id", req.ID)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	h.pubsub.Publish(pubsub.Event{
+		Type: "players:delete",
+		Payload: map[string]interface{}{
+			"id": req.ID,
+		},
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+}
+
 // SetPlayerPoints updates a player's points
 func (h *APIHandlers) SetPlayerPoints(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {

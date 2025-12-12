@@ -10,6 +10,12 @@
     <script src="https://unpkg.com/htmx.org@1.9.10/dist/ext/sse.js" integrity="sha384-JXOvQYm0HjCfIZ3Y3nKLu2lTMFfKPh7DQz0oj8p4w/pBBJsUkFhGZVPbLlDzTqQQ" crossorigin="anonymous"></script>
     <!-- Alpine.js for reactive client-side interactions -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js" integrity="sha384-LJQ3YeL7n9b1I0x5y7h1HiFkr3F7vW0bFfvvJfvRF9e9E2F2IfFdKf4thCK0mYGp" crossorigin="anonymous"></script>
+    <style>
+        /* Fallback: hide dropdown menu by default until Alpine.js initializes or JS handles it */
+        [x-cloak] { display: none !important; }
+        .dropdown-menu-hidden { display: none !important; }
+        .dropdown-menu-visible { display: block !important; }
+    </style>
 </head>
 <body class="min-h-screen" style="background: linear-gradient(135deg, #FFE5EC 0%, #E8D5F2 50%, #E0F2FE 100%); background-attachment: fixed;">
     <!-- Decorative football elements -->
@@ -28,14 +34,23 @@
             {{ end }}
         </div>
         <div class="relative">
-            <button @click="showMenu = !showMenu" class="flex items-center space-x-2 text-sm px-4 py-2 rounded-full bg-white border-2 border-pink-200 hover:border-pink-300 text-gray-700 hover:shadow-soft transition-all duration-200">
+            <button id="userMenuBtn" @click="showMenu = !showMenu" onclick="toggleUserMenu()" class="flex items-center space-x-2 text-sm px-4 py-2 rounded-full bg-white border-2 border-pink-200 hover:border-pink-300 text-gray-700 hover:shadow-soft transition-all duration-200">
                 <span class="font-semibold">{{ .User.Username }}</span>
                 {{ if .IsAdmin }}<span class="text-xs bg-purple-200 text-purple-800 px-2 py-1 rounded-full font-semibold">Admin</span>{{ end }}
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg id="userMenuArrow" class="w-4 h-4 transition-transform" :class="{ 'rotate-180': showMenu }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                 </svg>
             </button>
-            <div x-show="showMenu" @click.away="showMenu = false" class="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-soft-lg py-2 z-50 border-2 border-pink-200">
+            <div id="userMenuDropdown" x-show="showMenu" 
+                 x-cloak
+                 x-transition:enter="transition ease-out duration-100"
+                 x-transition:enter-start="opacity-0 scale-95"
+                 x-transition:enter-end="opacity-100 scale-100"
+                 x-transition:leave="transition ease-in duration-75"
+                 x-transition:leave-start="opacity-100 scale-100"
+                 x-transition:leave-end="opacity-0 scale-95"
+                 @click.away="showMenu = false" 
+                 class="dropdown-menu-hidden absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-soft-lg py-2 z-50 border-2 border-pink-200">
                 {{ if .IsAdmin }}
                 <a href="/admin" class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gradient-to-r hover:from-pink-50 hover:to-purple-50 font-medium rounded-xl mx-2">✨ Admin Panel</a>
                 {{ end }}
@@ -47,6 +62,44 @@
     
     {{ template "content" . }}
     <script>
+        // Pure JS fallback for user menu (works when Alpine.js is blocked)
+        var userMenuOpen = false;
+        function toggleUserMenu() {
+            // Only use this fallback if Alpine.js is not loaded
+            if (typeof Alpine === 'undefined') {
+                userMenuOpen = !userMenuOpen;
+                var dropdown = document.getElementById('userMenuDropdown');
+                var arrow = document.getElementById('userMenuArrow');
+                if (dropdown) {
+                    if (userMenuOpen) {
+                        dropdown.classList.remove('dropdown-menu-hidden');
+                        dropdown.classList.add('dropdown-menu-visible');
+                    } else {
+                        dropdown.classList.add('dropdown-menu-hidden');
+                        dropdown.classList.remove('dropdown-menu-visible');
+                    }
+                }
+                if (arrow) {
+                    arrow.style.transform = userMenuOpen ? 'rotate(180deg)' : '';
+                }
+            }
+        }
+        
+        // Close menu when clicking outside (fallback)
+        document.addEventListener('click', function(e) {
+            if (typeof Alpine === 'undefined') {
+                var dropdown = document.getElementById('userMenuDropdown');
+                var btn = document.getElementById('userMenuBtn');
+                if (dropdown && btn && !btn.contains(e.target) && !dropdown.contains(e.target)) {
+                    userMenuOpen = false;
+                    dropdown.classList.add('dropdown-menu-hidden');
+                    dropdown.classList.remove('dropdown-menu-visible');
+                    var arrow = document.getElementById('userMenuArrow');
+                    if (arrow) arrow.style.transform = '';
+                }
+            }
+        });
+
         // Connect to SSE for realtime updates
         document.addEventListener('DOMContentLoaded', function() {
             const eventSource = new EventSource('/api/events');

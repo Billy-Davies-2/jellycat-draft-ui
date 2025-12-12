@@ -83,6 +83,72 @@ func (m *MemoryDAL) AddPlayer(player *models.Player) (*models.Player, error) {
 	return player, nil
 }
 
+func (m *MemoryDAL) UpdatePlayer(player *models.Player) (*models.Player, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for i := range m.players {
+		if m.players[i].ID == player.ID {
+			// Cap cuddle points at 100
+			if player.CuddlePoints > 100 {
+				player.CuddlePoints = 100
+			}
+			if player.CuddlePoints < 0 {
+				player.CuddlePoints = 0
+			}
+
+			// Update player fields (preserve Points if not provided)
+			m.players[i].Name = player.Name
+			m.players[i].Position = player.Position
+			m.players[i].Team = player.Team
+			if player.Points != 0 {
+				m.players[i].Points = player.Points
+			}
+			m.players[i].CuddlePoints = player.CuddlePoints
+			m.players[i].Tier = player.Tier
+			m.players[i].Image = player.Image
+
+			// Update in team rosters too
+			for j := range m.teams {
+				for k := range m.teams[j].Players {
+					if m.teams[j].Players[k].ID == player.ID {
+						m.teams[j].Players[k] = m.players[i]
+					}
+				}
+			}
+
+			return &m.players[i], nil
+		}
+	}
+
+	return nil, fmt.Errorf("player not found")
+}
+
+func (m *MemoryDAL) DeletePlayer(id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Find and remove player
+	found := false
+	for i := range m.players {
+		if m.players[i].ID == id {
+			// Cannot delete a drafted player
+			if m.players[i].Drafted {
+				return fmt.Errorf("cannot delete a drafted player")
+			}
+			m.players = append(m.players[:i], m.players[i+1:]...)
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("player not found")
+	}
+
+	return nil
+}
+
 func (m *MemoryDAL) SetPlayerPoints(id string, points int) (*models.Player, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

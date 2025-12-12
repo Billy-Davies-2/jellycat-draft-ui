@@ -7,6 +7,8 @@ type DraftDAL interface {
 	GetState() (*models.DraftState, error)
 	Reset() error
 	AddPlayer(player *models.Player) (*models.Player, error)
+	UpdatePlayer(player *models.Player) (*models.Player, error)
+	DeletePlayer(id string) error
 	SetPlayerPoints(id string, points int) (*models.Player, error)
 	ReorderTeams(order []string) ([]models.Team, error)
 	DraftPlayer(playerID, teamID string) error
