@@ -6,7 +6,11 @@ FROM golang:1.25-alpine AS builder
 WORKDIR /app
 
 # Update CA certificates and install build dependencies for static compilation
-RUN apk update && apk add --no-cache gcc musl-dev sqlite-dev
+RUN apk update && apk add --no-cache gcc musl-dev sqlite-dev curl
+
+# Download TailwindCSS standalone CLI
+RUN curl -sLO https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64 && \
+    chmod +x tailwindcss-linux-x64
 
 # Copy go mod files
 COPY go.mod go.sum ./
@@ -14,6 +18,9 @@ RUN go mod download
 
 # Copy source code
 COPY . .
+
+# Build TailwindCSS
+RUN ./tailwindcss-linux-x64 -i static/css/input.css -o static/css/styles.css --minify
 
 # Build the application as a static binary
 # Note: We link statically against musl and sqlite

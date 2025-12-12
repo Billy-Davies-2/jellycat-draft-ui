@@ -32,12 +32,31 @@ func NewPostgresDAL(connString string) (*PostgresDAL, error) {
 	db.SetConnMaxLifetime(5 * time.Minute) // Recycle connections to handle failovers gracefully
 	db.SetConnMaxIdleTime(1 * time.Minute) // Close idle connections to reduce load
 
-	// Test connection with context timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	if err := db.PingContext(ctx); err != nil {
-		return nil, fmt.Errorf("failed to ping postgres: %w", err)
+	// Test connection with retry logic for Kubernetes DNS resolution
+	// Increased timeout to 60s to handle DNS propagation delays in Kubernetes
+	maxRetries := 5
+	retryDelay := 5 * time.Second
+	var lastErr error
+	
+	for i := 0; i < maxRetries; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		err := db.PingContext(ctx)
+		cancel()
+		
+		if err == nil {
+			// Connection successful
+			break
+		}
+		
+		lastErr = err
+		if i < maxRetries-1 {
+			// Wait before retrying (unless it's the last attempt)
+			time.Sleep(retryDelay)
+		}
+	}
+	
+	if lastErr != nil {
+		return nil, fmt.Errorf("failed to ping postgres after %d retries: %w", maxRetries, lastErr)
 	}
 
 	dal := &PostgresDAL{
