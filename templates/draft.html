@@ -89,6 +89,7 @@
                                 {{ range .Players }}
                                 {{ if not .Drafted }}
                                 <div class="player-card"
+                                     data-player-id="{{ .ID }}"
                                      onclick="selectPlayer('{{ .ID }}', '{{ .Name }}', '{{ .Image }}', '{{ .Team }}', '{{ .Position }}', {{ .Points }})">
                                     <div class="flex flex-col items-center gap-3 mb-3">
                                         <img src="{{ .Image }}" alt="{{ .Name }}" 
@@ -200,7 +201,7 @@
                         </div>
                         <div id="chat-messages" class="p-5 space-y-3 max-h-96 overflow-y-auto">
                             {{ range .Chat }}
-                            <div class="p-4 rounded-2xl bg-gradient-to-br from-white to-pink-50 border-2 border-pink-200 shadow-soft hover:shadow-soft-lg transition-all duration-200">
+                            <div data-message-id="{{ .ID }}" class="p-4 rounded-2xl bg-gradient-to-br from-white to-pink-50 border-2 border-pink-200 shadow-soft hover:shadow-soft-lg transition-all duration-200">
                                 <div class="text-sm mb-2">
                                     <span class="{{ if eq .Type "system" }}text-purple-700 font-bold font-display{{ else }}text-gray-800 font-semibold{{ end }}">
                                         {{ if eq .Type "system" }}🤖 System{{ else }}👤 User{{ end }}
@@ -350,7 +351,7 @@ function draftApp() {
         notification: null,
         
         init() {
-            // Listen for SSE events and reload page to show updates
+            // Listen for SSE events and update UI dynamically
             const eventSource = new EventSource('/api/events');
             const isUserTurn = {{ .IsUserTurn }};
             const currentTeamName = "{{ .CurrentTeamName }}";
@@ -360,11 +361,29 @@ function draftApp() {
                 try {
                     const data = JSON.parse(event.data);
                     if (data.type === 'draft:pick') {
-                        // Show a brief notification before reloading
-                        this.showNotification('Player drafted! Updating...', 'success');
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 800);
+                        // Remove the drafted player from the UI
+                        const playerId = data.payload?.playerId;
+                        if (playerId) {
+                            const playerCard = document.querySelector(`[data-player-id="${playerId}"]`);
+                            if (playerCard) {
+                                // Animate removal
+                                playerCard.style.transition = 'all 0.3s ease-out';
+                                playerCard.style.opacity = '0';
+                                playerCard.style.transform = 'scale(0.8)';
+                                setTimeout(() => {
+                                    playerCard.remove();
+                                    this.updateAvailableCount();
+                                    // Clear sidebar if this was the selected player
+                                    if (selectedPlayer && selectedPlayer.id === playerId) {
+                                        this.clearDraftSidebar();
+                                    }
+                                }, 300);
+                            }
+                        }
+                        this.showNotification('Player drafted! 🎉', 'success');
+                    } else if (data.type === 'chat:add') {
+                        // Fetch and append the latest chat message
+                        this.appendLatestChatMessage();
                     } else if (data.type === 'draft:reset') {
                         this.showNotification('Draft reset!', 'info');
                         setTimeout(() => {
@@ -386,6 +405,82 @@ function draftApp() {
                     }
                 }, 500);
             }
+        },
+        
+        updateAvailableCount() {
+            const players = document.querySelectorAll('#players-grid > div');
+            const counter = document.getElementById('available-count');
+            if (counter) {
+                counter.textContent = players.length;
+            }
+        },
+        
+        clearDraftSidebar() {
+            const sidebar = document.getElementById('draft-sidebar');
+            if (sidebar) {
+                sidebar.innerHTML = `
+                    <div class="text-center text-gray-500 py-10">
+                        <div class="text-5xl mb-3 animate-float-slow">🧸</div>
+                        <div class="font-display text-gray-600">Select a Jellycat to draft</div>
+                        <div class="mt-2 text-sm">⚽ Choose wisely! ⚽</div>
+                    </div>
+                `;
+            }
+            selectedPlayer = null;
+        },
+        
+        async appendLatestChatMessage() {
+            try {
+                const response = await fetch('/api/chat');
+                if (!response.ok) return;
+                const messages = await response.json();
+                if (!messages || messages.length === 0) return;
+                
+                // Get the latest message
+                const latestMessage = messages[messages.length - 1];
+                
+                // Check if message already exists in the DOM
+                const chatMessages = document.getElementById('chat-messages');
+                if (!chatMessages) return;
+                
+                const existingMessage = chatMessages.querySelector(`[data-message-id="${latestMessage.id}"]`);
+                if (existingMessage) return; // Already displayed
+                
+                // Create message element
+                const messageEl = this.createChatMessageElement(latestMessage);
+                chatMessages.appendChild(messageEl);
+                
+                // Scroll to bottom
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            } catch (e) {
+                console.error('Failed to append chat message:', e);
+            }
+        },
+        
+        createChatMessageElement(msg) {
+            const div = document.createElement('div');
+            div.setAttribute('data-message-id', msg.id);
+            div.className = 'p-4 rounded-2xl bg-gradient-to-br from-white to-pink-50 border-2 border-pink-200 shadow-soft hover:shadow-soft-lg transition-all duration-200';
+            
+            const timestamp = new Date(msg.ts).toLocaleTimeString();
+            const typeLabel = msg.type === 'system' ? '🤖 System' : '👤 User';
+            const typeClass = msg.type === 'system' ? 'text-purple-700 font-bold font-display' : 'text-gray-800 font-semibold';
+            
+            div.innerHTML = `
+                <div class="text-sm mb-2">
+                    <span class="${typeClass}">${typeLabel}</span>
+                    <span class="text-gray-500 text-xs ml-2">${timestamp}</span>
+                </div>
+                <div class="text-gray-800 font-display">${this.escapeHtml(msg.text)}</div>
+            `;
+            
+            return div;
+        },
+        
+        escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         },
         
         filterPlayers() {

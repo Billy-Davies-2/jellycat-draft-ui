@@ -66,12 +66,20 @@ func (h *APIHandlers) DraftPick(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Publish event
+	// Publish draft pick event
 	h.pubsub.Publish(pubsub.Event{
 		Type: "draft:pick",
 		Payload: map[string]interface{}{
 			"playerId": req.PlayerID,
 			"teamId":   req.TeamID,
+		},
+	})
+
+	// Publish chat event for the system message that was created
+	h.pubsub.Publish(pubsub.Event{
+		Type: "chat:add",
+		Payload: map[string]interface{}{
+			"type": "system",
 		},
 	})
 
