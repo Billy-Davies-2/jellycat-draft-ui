@@ -44,6 +44,7 @@ func (s *SQLiteDAL) initSchema() error {
 		position TEXT NOT NULL,
 		team TEXT NOT NULL,
 		points INTEGER NOT NULL,
+		cuddle_points INTEGER NOT NULL DEFAULT 50,
 		tier TEXT NOT NULL,
 		drafted INTEGER NOT NULL DEFAULT 0,
 		drafted_by TEXT,
@@ -62,6 +63,7 @@ func (s *SQLiteDAL) initSchema() error {
 		team_id TEXT NOT NULL,
 		player_id TEXT NOT NULL,
 		player_data TEXT NOT NULL,
+		draft_pick_number INTEGER,
 		FOREIGN KEY (team_id) REFERENCES teams(id),
 		FOREIGN KEY (player_id) REFERENCES players(id)
 	);
@@ -77,6 +79,43 @@ func (s *SQLiteDAL) initSchema() error {
 
 	if _, err := s.db.Exec(schema); err != nil {
 		return err
+	}
+
+	// Add cuddle_points column to existing databases (migration)
+	// SQLite doesn't support IF NOT EXISTS for ALTER TABLE, so we check first
+	var cuddlePointsExists int
+	err := s.db.QueryRow(`
+		SELECT COUNT(*) 
+		FROM pragma_table_info('players') 
+		WHERE name='cuddle_points'
+	`).Scan(&cuddlePointsExists)
+	if err != nil {
+		return fmt.Errorf("failed to check cuddle_points column existence: %w", err)
+	}
+
+	if cuddlePointsExists == 0 {
+		_, err = s.db.Exec(`ALTER TABLE players ADD COLUMN cuddle_points INTEGER NOT NULL DEFAULT 50`)
+		if err != nil {
+			return fmt.Errorf("failed to add cuddle_points column: %w", err)
+		}
+	}
+
+	// Add draft_pick_number column to team_players for existing databases
+	var draftPickNumberExists int
+	err = s.db.QueryRow(`
+		SELECT COUNT(*) 
+		FROM pragma_table_info('team_players') 
+		WHERE name='draft_pick_number'
+	`).Scan(&draftPickNumberExists)
+	if err != nil {
+		return fmt.Errorf("failed to check draft_pick_number column existence: %w", err)
+	}
+
+	if draftPickNumberExists == 0 {
+		_, err = s.db.Exec(`ALTER TABLE team_players ADD COLUMN draft_pick_number INTEGER`)
+		if err != nil {
+			return fmt.Errorf("failed to add draft_pick_number column: %w", err)
+		}
 	}
 
 	// Seed default data if empty
@@ -101,9 +140,9 @@ func (s *SQLiteDAL) seedData() error {
 	// Insert players
 	for _, p := range players {
 		_, err := s.db.Exec(`
-			INSERT INTO players (id, name, position, team, points, tier, drafted, drafted_by, image)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`, p.ID, p.Name, p.Position, p.Team, p.Points, p.Tier, 0, "", p.Image)
+			INSERT INTO players (id, name, position, team, points, cuddle_points, tier, drafted, drafted_by, image)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, p.ID, p.Name, p.Position, p.Team, p.Points, p.CuddlePoints, p.Tier, 0, "", p.Image)
 		if err != nil {
 			return err
 		}
@@ -137,7 +176,7 @@ func (s *SQLiteDAL) GetState() (*models.DraftState, error) {
 
 	// Get players
 	rows, err := s.db.Query(`
-		SELECT id, name, position, team, points, tier, drafted, drafted_by, image
+		SELECT id, name, position, team, points, cuddle_points, tier, drafted, drafted_by, image
 		FROM players
 	`)
 	if err != nil {
@@ -149,7 +188,7 @@ func (s *SQLiteDAL) GetState() (*models.DraftState, error) {
 		var p models.Player
 		var drafted int
 		var draftedBy sql.NullString
-		err := rows.Scan(&p.ID, &p.Name, &p.Position, &p.Team, &p.Points, &p.Tier, &drafted, &draftedBy, &p.Image)
+		err := rows.Scan(&p.ID, &p.Name, &p.Position, &p.Team, &p.Points, &p.CuddlePoints, &p.Tier, &drafted, &draftedBy, &p.Image)
 		if err != nil {
 			return nil, err
 		}
@@ -259,15 +298,20 @@ func (s *SQLiteDAL) AddPlayer(player *models.Player) (*models.Player, error) {
 		player.ID = genID("player")
 	}
 
+	// Assign random cuddle points if not already set
+	if player.CuddlePoints == 0 {
+		player.CuddlePoints = randomCuddlePoints()
+	}
+
 	drafted := 0
 	if player.Drafted {
 		drafted = 1
 	}
 
 	_, err := s.db.Exec(`
-		INSERT INTO players (id, name, position, team, points, tier, drafted, drafted_by, image)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, player.ID, player.Name, player.Position, player.Team, player.Points, player.Tier, drafted, player.DraftedBy, player.Image)
+		INSERT INTO players (id, name, position, team, points, cuddle_points, tier, drafted, drafted_by, image)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, player.ID, player.Name, player.Position, player.Team, player.Points, player.CuddlePoints, player.Tier, drafted, player.DraftedBy, player.Image)
 
 	return player, err
 }
@@ -290,9 +334,9 @@ func (s *SQLiteDAL) SetPlayerPoints(id string, points int) (*models.Player, erro
 	var drafted int
 	var draftedBy sql.NullString
 	err = s.db.QueryRow(`
-		SELECT id, name, position, team, points, tier, drafted, drafted_by, image
+		SELECT id, name, position, team, points, cuddle_points, tier, drafted, drafted_by, image
 		FROM players WHERE id = ?
-	`, id).Scan(&p.ID, &p.Name, &p.Position, &p.Team, &p.Points, &p.Tier, &drafted, &draftedBy, &p.Image)
+	`, id).Scan(&p.ID, &p.Name, &p.Position, &p.Team, &p.Points, &p.CuddlePoints, &p.Tier, &drafted, &draftedBy, &p.Image)
 
 	if err != nil {
 		return nil, err
@@ -334,13 +378,20 @@ func (s *SQLiteDAL) DraftPlayer(playerID, teamID string) error {
 	}
 	defer tx.Rollback()
 
-	// Get player
+	// Get the current draft pick number (count of already drafted players + 1)
+	var draftPickNumber int
+	err = tx.QueryRow(`SELECT COUNT(*) + 1 FROM team_players`).Scan(&draftPickNumber)
+	if err != nil {
+		return err
+	}
+
+	// Get player including cuddle_points
 	var p models.Player
 	var drafted int
 	err = tx.QueryRow(`
-		SELECT id, name, position, team, points, tier, drafted, image
+		SELECT id, name, position, team, points, cuddle_points, tier, drafted, image
 		FROM players WHERE id = ?
-	`, playerID).Scan(&p.ID, &p.Name, &p.Position, &p.Team, &p.Points, &p.Tier, &drafted, &p.Image)
+	`, playerID).Scan(&p.ID, &p.Name, &p.Position, &p.Team, &p.Points, &p.CuddlePoints, &p.Tier, &drafted, &p.Image)
 
 	if err != nil {
 		return err
@@ -360,22 +411,48 @@ func (s *SQLiteDAL) DraftPlayer(playerID, teamID string) error {
 		return err
 	}
 
-	// Update player as drafted
+	// Calculate cuddle points adjustment based on draft position
+	// Early picks (1-6) gain points, late picks (13-18) lose points
+	cuddlePointsAdjustment := 0
+	if draftPickNumber <= 6 {
+		// Early picks gain 8-18 points (pick 1 gets +18, pick 6 gets +8)
+		cuddlePointsAdjustment = 20 - (draftPickNumber * 2)
+	} else if draftPickNumber >= 13 {
+		// Late picks lose 5-10 points (pick 13 loses -5, pick 18 loses -10)
+		cuddlePointsAdjustment = 8 - draftPickNumber
+	}
+
+	newCuddlePoints := p.CuddlePoints + cuddlePointsAdjustment
+	// Ensure cuddle points stay within reasonable bounds (min 10, max 100)
+	if newCuddlePoints < 10 {
+		newCuddlePoints = 10
+	}
+	if newCuddlePoints > 100 {
+		newCuddlePoints = 100
+	}
+
+	// Update player as drafted with adjusted cuddle points
 	_, err = tx.Exec(`
-		UPDATE players SET drafted = 1, drafted_by = ? WHERE id = ?
-	`, teamName, playerID)
+		UPDATE players SET drafted = 1, drafted_by = ?, cuddle_points = ? WHERE id = ?
+	`, teamName, newCuddlePoints, playerID)
 	if err != nil {
 		return err
 	}
 
-	// Add player to team
+	// Update player object for JSON storage
 	p.Drafted = true
 	p.DraftedBy = teamName
-	playerJSON, _ := json.Marshal(p)
+	p.CuddlePoints = newCuddlePoints
+	playerJSON, err := json.Marshal(p)
+	if err != nil {
+		return fmt.Errorf("failed to marshal player data: %w", err)
+	}
+
+	// Add player to team with draft pick number
 	_, err = tx.Exec(`
-		INSERT INTO team_players (team_id, player_id, player_data)
-		VALUES (?, ?, ?)
-	`, teamID, playerID, string(playerJSON))
+		INSERT INTO team_players (team_id, player_id, player_data, draft_pick_number)
+		VALUES (?, ?, ?, ?)
+	`, teamID, playerID, string(playerJSON), draftPickNumber)
 	if err != nil {
 		return err
 	}

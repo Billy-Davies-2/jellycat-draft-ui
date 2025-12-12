@@ -35,7 +35,7 @@ func NewPostgresDAL(connString string) (*PostgresDAL, error) {
 	// Test connection with context timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	
+
 	if err := db.PingContext(ctx); err != nil {
 		return nil, fmt.Errorf("failed to ping postgres: %w", err)
 	}
@@ -60,6 +60,7 @@ func (p *PostgresDAL) initSchema() error {
 		position TEXT NOT NULL,
 		team TEXT NOT NULL,
 		points INTEGER NOT NULL,
+		cuddle_points INTEGER NOT NULL DEFAULT 50,
 		tier TEXT NOT NULL,
 		drafted BOOLEAN NOT NULL DEFAULT false,
 		drafted_by TEXT,
@@ -82,6 +83,7 @@ func (p *PostgresDAL) initSchema() error {
 		team_id TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
 		player_id TEXT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
 		player_data JSONB NOT NULL,
+		draft_pick_number INTEGER,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		PRIMARY KEY (team_id, player_id)
 	);
@@ -105,6 +107,24 @@ func (p *PostgresDAL) initSchema() error {
 
 	if _, err := p.db.Exec(schema); err != nil {
 		return err
+	}
+
+	// Add cuddle_points column to existing databases (migration)
+	_, err := p.db.Exec(`
+		ALTER TABLE players
+		ADD COLUMN IF NOT EXISTS cuddle_points INTEGER NOT NULL DEFAULT 50
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to add cuddle_points column: %w", err)
+	}
+
+	// Add draft_pick_number column to team_players for existing databases
+	_, err = p.db.Exec(`
+		ALTER TABLE team_players
+		ADD COLUMN IF NOT EXISTS draft_pick_number INTEGER
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to add draft_pick_number column: %w", err)
 	}
 
 	// Check if we need to seed data
@@ -147,7 +167,10 @@ func (p *PostgresDAL) seedData() error {
 	defer playerStmt.Close()
 
 	for _, player := range players {
-		_, err := playerStmt.ExecContext(ctx, player.ID, player.Name, player.Position, player.Team, player.Points, player.Tier, player.Drafted, "", player.Image)
+		_, err := p.db.Exec(`
+			INSERT INTO players (id, name, position, team, points, cuddle_points, tier, drafted, drafted_by, image)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		`, player.ID, player.Name, player.Position, player.Team, player.Points, player.CuddlePoints, player.Tier, player.Drafted, "", player.Image)
 		if err != nil {
 			return err
 		}
@@ -198,7 +221,7 @@ func (p *PostgresDAL) GetState() (*models.DraftState, error) {
 
 	// Get players
 	rows, err := p.db.Query(`
-		SELECT id, name, position, team, points, tier, drafted, COALESCE(drafted_by, ''), image
+		SELECT id, name, position, team, points, cuddle_points, tier, drafted, COALESCE(drafted_by, ''), image
 		FROM players
 		ORDER BY points DESC
 	`)
@@ -209,7 +232,7 @@ func (p *PostgresDAL) GetState() (*models.DraftState, error) {
 
 	for rows.Next() {
 		var player models.Player
-		err := rows.Scan(&player.ID, &player.Name, &player.Position, &player.Team, &player.Points, &player.Tier, &player.Drafted, &player.DraftedBy, &player.Image)
+		err := rows.Scan(&player.ID, &player.Name, &player.Position, &player.Team, &player.Points, &player.CuddlePoints, &player.Tier, &player.Drafted, &player.DraftedBy, &player.Image)
 		if err != nil {
 			return nil, err
 		}
@@ -219,7 +242,7 @@ func (p *PostgresDAL) GetState() (*models.DraftState, error) {
 	// CloudNativePG optimization: Get teams with their players in a single query using JOIN
 	// This eliminates N+1 query problem and improves performance with read replicas
 	teamRows, err := p.db.Query(`
-		SELECT 
+		SELECT
 			t.id, t.name, t.owner, t.mascot, t.color,
 			tp.player_data
 		FROM teams t
@@ -238,7 +261,7 @@ func (p *PostgresDAL) GetState() (*models.DraftState, error) {
 	for teamRows.Next() {
 		var teamID, teamName, teamOwner, teamMascot, teamColor string
 		var playerJSON sql.NullString
-		
+
 		err := teamRows.Scan(&teamID, &teamName, &teamOwner, &teamMascot, &teamColor, &playerJSON)
 		if err != nil {
 			return nil, err
@@ -312,10 +335,15 @@ func (p *PostgresDAL) AddPlayer(player *models.Player) (*models.Player, error) {
 		player.ID = genID("player")
 	}
 
+	// Assign random cuddle points if not already set
+	if player.CuddlePoints == 0 {
+		player.CuddlePoints = randomCuddlePoints()
+	}
+
 	_, err := p.db.Exec(`
-		INSERT INTO players (id, name, position, team, points, tier, drafted, drafted_by, image)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-	`, player.ID, player.Name, player.Position, player.Team, player.Points, player.Tier, player.Drafted, player.DraftedBy, player.Image)
+		INSERT INTO players (id, name, position, team, points, cuddle_points, tier, drafted, drafted_by, image)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+	`, player.ID, player.Name, player.Position, player.Team, player.Points, player.CuddlePoints, player.Tier, player.Drafted, player.DraftedBy, player.Image)
 
 	return player, err
 }
@@ -328,7 +356,7 @@ func (p *PostgresDAL) SetPlayerPoints(id string, points int) (*models.Player, er
 
 	// Also update in team_players
 	_, err = p.db.Exec(`
-		UPDATE team_players 
+		UPDATE team_players
 		SET player_data = jsonb_set(player_data, '{points}', $1::text::jsonb)
 		WHERE (player_data->>'id') = $2
 	`, points, id)
@@ -336,9 +364,9 @@ func (p *PostgresDAL) SetPlayerPoints(id string, points int) (*models.Player, er
 	// Get updated player
 	var player models.Player
 	err = p.db.QueryRow(`
-		SELECT id, name, position, team, points, tier, drafted, COALESCE(drafted_by, ''), image
+		SELECT id, name, position, team, points, cuddle_points, tier, drafted, COALESCE(drafted_by, ''), image
 		FROM players WHERE id = $1
-	`, id).Scan(&player.ID, &player.Name, &player.Position, &player.Team, &player.Points, &player.Tier, &player.Drafted, &player.DraftedBy, &player.Image)
+	`, id).Scan(&player.ID, &player.Name, &player.Position, &player.Team, &player.Points, &player.CuddlePoints, &player.Tier, &player.Drafted, &player.DraftedBy, &player.Image)
 
 	return &player, err
 }
@@ -374,25 +402,19 @@ func (p *PostgresDAL) DraftPlayer(playerID, teamID string) error {
 	}
 	defer tx.Rollback()
 
-	// CloudNativePG optimization: Combine player and team queries into one to reduce round trips
-	var player models.Player
-	var teamName, teamMascot string
-	
-	// Use CROSS JOIN with explicit condition to ensure single row result
-	err = tx.QueryRowContext(ctx, `
-		SELECT 
-			p.id, p.name, p.position, p.team, p.points, p.tier, p.drafted, p.image,
-			t.name, t.mascot
-		FROM players p
-		CROSS JOIN teams t
-		WHERE p.id = $1 AND t.id = $2
-		FOR UPDATE OF p
-	`, playerID, teamID).Scan(
-		&player.ID, &player.Name, &player.Position, &player.Team, 
-		&player.Points, &player.Tier, &player.Drafted, &player.Image,
-		&teamName, &teamMascot,
-	)
+	// Get the current draft pick number (count of already drafted players + 1)
+	var draftPickNumber int
+	err = tx.QueryRow(`SELECT COUNT(*) + 1 FROM team_players`).Scan(&draftPickNumber)
+	if err != nil {
+		return err
+	}
 
+	// Get player including cuddle_points
+	var player models.Player
+	err = tx.QueryRow(`
+		SELECT id, name, position, team, points, cuddle_points, tier, drafted, image
+		FROM players WHERE id = $1 FOR UPDATE
+	`, playerID).Scan(&player.ID, &player.Name, &player.Position, &player.Team, &player.Points, &player.CuddlePoints, &player.Tier, &player.Drafted, &player.Image)
 	if err != nil {
 		return err
 	}
@@ -401,20 +423,57 @@ func (p *PostgresDAL) DraftPlayer(playerID, teamID string) error {
 		return fmt.Errorf("player already drafted")
 	}
 
-	// Update player as drafted
-	_, err = tx.ExecContext(ctx, `UPDATE players SET drafted = true, drafted_by = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`, teamName, playerID)
+	// Get team
+	var teamName, teamMascot string
+	err = tx.QueryRow(`SELECT name, mascot FROM teams WHERE id = $1`, teamID).Scan(&teamName, &teamMascot)
 	if err != nil {
 		return err
 	}
 
-	// Add player to team
+	// Calculate cuddle points adjustment based on draft position
+	// Early picks (1-6) gain points, late picks (13-18) lose points
+	cuddlePointsAdjustment := 0
+	if draftPickNumber <= 6 {
+		// Early picks gain 8-18 points (pick 1 gets +18, pick 6 gets +8)
+		cuddlePointsAdjustment = 20 - (draftPickNumber * 2)
+	} else if draftPickNumber >= 13 {
+		// Late picks lose 5-10 points (pick 13 loses -5, pick 18 loses -10)
+		cuddlePointsAdjustment = 8 - draftPickNumber
+	}
+
+	newCuddlePoints := player.CuddlePoints + cuddlePointsAdjustment
+	// Ensure cuddle points stay within reasonable bounds (min 10, max 100)
+	if newCuddlePoints < 10 {
+		newCuddlePoints = 10
+	}
+	if newCuddlePoints > 100 {
+		newCuddlePoints = 100
+	}
+
+	// Update player as drafted with adjusted cuddle points
+	_, err = tx.Exec(`
+		UPDATE players
+		SET drafted = true, drafted_by = $1, cuddle_points = $2, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $3
+	`, teamName, newCuddlePoints, playerID)
+	if err != nil {
+		return err
+	}
+
+	// Update player object for JSON storage
 	player.Drafted = true
 	player.DraftedBy = teamName
-	playerJSON, _ := json.Marshal(player)
-	_, err = tx.ExecContext(ctx, `
-		INSERT INTO team_players (team_id, player_id, player_data)
-		VALUES ($1, $2, $3)
-	`, teamID, playerID, playerJSON)
+	player.CuddlePoints = newCuddlePoints
+	playerJSON, err := json.Marshal(player)
+	if err != nil {
+		return fmt.Errorf("failed to marshal player data: %w", err)
+	}
+
+	// Add player to team with draft pick number
+	_, err = tx.Exec(`
+		INSERT INTO team_players (team_id, player_id, player_data, draft_pick_number)
+		VALUES ($1, $2, $3, $4)
+	`, teamID, playerID, playerJSON, draftPickNumber)
 	if err != nil {
 		return err
 	}
@@ -481,7 +540,7 @@ func (p *PostgresDAL) AddReaction(messageID, emote, userID string) (*models.Chat
 
 	// Update emotes using jsonb operations
 	_, err := p.db.Exec(`
-		UPDATE chat 
+		UPDATE chat
 		SET emotes = jsonb_set(
 			COALESCE(emotes, '{}'::jsonb),
 			ARRAY[$2],
@@ -545,7 +604,6 @@ func (p *PostgresDAL) AddTeam(name, owner, mascot, color string) (*models.Team, 
 		INSERT INTO teams (id, name, owner, mascot, color)
 		VALUES ($1, $2, $3, $4, $5)
 	`, team.ID, team.Name, team.Owner, team.Mascot, team.Color)
-
 	if err != nil {
 		return nil, err
 	}
