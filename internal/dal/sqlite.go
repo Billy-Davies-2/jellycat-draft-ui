@@ -89,8 +89,11 @@ func (s *SQLiteDAL) initSchema() error {
 		FROM pragma_table_info('players') 
 		WHERE name='cuddle_points'
 	`).Scan(&cuddlePointsExists)
+	if err != nil {
+		return fmt.Errorf("failed to check cuddle_points column existence: %w", err)
+	}
 
-	if err == nil && cuddlePointsExists == 0 {
+	if cuddlePointsExists == 0 {
 		_, err = s.db.Exec(`ALTER TABLE players ADD COLUMN cuddle_points INTEGER NOT NULL DEFAULT 50`)
 		if err != nil {
 			return fmt.Errorf("failed to add cuddle_points column: %w", err)
@@ -104,8 +107,11 @@ func (s *SQLiteDAL) initSchema() error {
 		FROM pragma_table_info('team_players') 
 		WHERE name='draft_pick_number'
 	`).Scan(&draftPickNumberExists)
+	if err != nil {
+		return fmt.Errorf("failed to check draft_pick_number column existence: %w", err)
+	}
 
-	if err == nil && draftPickNumberExists == 0 {
+	if draftPickNumberExists == 0 {
 		_, err = s.db.Exec(`ALTER TABLE team_players ADD COLUMN draft_pick_number INTEGER`)
 		if err != nil {
 			return fmt.Errorf("failed to add draft_pick_number column: %w", err)
@@ -437,7 +443,10 @@ func (s *SQLiteDAL) DraftPlayer(playerID, teamID string) error {
 	p.Drafted = true
 	p.DraftedBy = teamName
 	p.CuddlePoints = newCuddlePoints
-	playerJSON, _ := json.Marshal(p)
+	playerJSON, err := json.Marshal(p)
+	if err != nil {
+		return fmt.Errorf("failed to marshal player data: %w", err)
+	}
 
 	// Add player to team with draft pick number
 	_, err = tx.Exec(`

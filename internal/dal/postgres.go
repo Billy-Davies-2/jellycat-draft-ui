@@ -464,7 +464,10 @@ func (p *PostgresDAL) DraftPlayer(playerID, teamID string) error {
 	player.Drafted = true
 	player.DraftedBy = teamName
 	player.CuddlePoints = newCuddlePoints
-	playerJSON, _ := json.Marshal(player)
+	playerJSON, err := json.Marshal(player)
+	if err != nil {
+		return fmt.Errorf("failed to marshal player data: %w", err)
+	}
 
 	// Add player to team with draft pick number
 	_, err = tx.Exec(`
