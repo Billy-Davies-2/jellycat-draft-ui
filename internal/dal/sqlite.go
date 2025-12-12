@@ -316,6 +316,91 @@ func (s *SQLiteDAL) AddPlayer(player *models.Player) (*models.Player, error) {
 	return player, err
 }
 
+func (s *SQLiteDAL) UpdatePlayer(player *models.Player) (*models.Player, error) {
+	// Cap cuddle points at 100
+	if player.CuddlePoints > 100 {
+		player.CuddlePoints = 100
+	}
+	if player.CuddlePoints < 0 {
+		player.CuddlePoints = 0
+	}
+
+	// Check if player exists and get current data
+	var drafted int
+	var currentPoints int
+	err := s.db.QueryRow(`SELECT drafted, points FROM players WHERE id = ?`, player.ID).Scan(&drafted, &currentPoints)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("player not found")
+		}
+		return nil, err
+	}
+
+	// Preserve points if not provided
+	pointsToUpdate := player.Points
+	if pointsToUpdate == 0 {
+		pointsToUpdate = currentPoints
+	}
+
+	_, err = s.db.Exec(`
+		UPDATE players 
+		SET name = ?, position = ?, team = ?, points = ?, cuddle_points = ?, tier = ?, image = ?
+		WHERE id = ?
+	`, player.Name, player.Position, player.Team, pointsToUpdate, player.CuddlePoints, player.Tier, player.Image, player.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Also update in team_players if player is drafted
+	if drafted == 1 {
+		player.Points = pointsToUpdate
+		playerJSON, _ := json.Marshal(player)
+		_, err = s.db.Exec(`
+			UPDATE team_players 
+			SET player_data = ?
+			WHERE player_id = ?
+		`, string(playerJSON), player.ID)
+	}
+
+	// Get updated player
+	var p models.Player
+	var draftedBy sql.NullString
+	err = s.db.QueryRow(`
+		SELECT id, name, position, team, points, cuddle_points, tier, drafted, drafted_by, image
+		FROM players WHERE id = ?
+	`, player.ID).Scan(&p.ID, &p.Name, &p.Position, &p.Team, &p.Points, &p.CuddlePoints, &p.Tier, &drafted, &draftedBy, &p.Image)
+
+	if err != nil {
+		return nil, err
+	}
+
+	p.Drafted = drafted == 1
+	if draftedBy.Valid {
+		p.DraftedBy = draftedBy.String
+	}
+
+	return &p, nil
+}
+
+func (s *SQLiteDAL) DeletePlayer(id string) error {
+	// Check if player exists and is not drafted
+	var drafted int
+	err := s.db.QueryRow(`SELECT drafted FROM players WHERE id = ?`, id).Scan(&drafted)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("player not found")
+		}
+		return err
+	}
+
+	if drafted == 1 {
+		return fmt.Errorf("cannot delete a drafted player")
+	}
+
+	_, err = s.db.Exec(`DELETE FROM players WHERE id = ?`, id)
+	return err
+}
+
 func (s *SQLiteDAL) SetPlayerPoints(id string, points int) (*models.Player, error) {
 	_, err := s.db.Exec(`UPDATE players SET points = ? WHERE id = ?`, points, id)
 	if err != nil {
