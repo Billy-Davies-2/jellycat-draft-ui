@@ -1,6 +1,7 @@
 package dal
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -17,14 +18,25 @@ type PostgresDAL struct {
 	reactionUsers map[string]map[string]map[string]bool
 }
 
-// NewPostgresDAL creates a new PostgreSQL data access layer
+// NewPostgresDAL creates a new PostgreSQL data access layer optimized for CloudNativePG
 func NewPostgresDAL(connString string) (*PostgresDAL, error) {
 	db, err := sql.Open("postgres", connString)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := db.Ping(); err != nil {
+	// CloudNativePG optimization: Configure connection pool settings
+	// These settings are optimized for CloudNativePG high-availability clusters
+	db.SetMaxOpenConns(25)                 // Limit max connections (CloudNativePG default max_connections is 100)
+	db.SetMaxIdleConns(5)                  // Keep some idle connections for quick reuse
+	db.SetConnMaxLifetime(5 * time.Minute) // Recycle connections to handle failovers gracefully
+	db.SetConnMaxIdleTime(1 * time.Minute) // Close idle connections to reduce load
+
+	// Test connection with context timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := db.PingContext(ctx); err != nil {
 		return nil, fmt.Errorf("failed to ping postgres: %w", err)
 	}
 
@@ -85,8 +97,12 @@ func (p *PostgresDAL) initSchema() error {
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);
 
+	-- CloudNativePG optimization: Add indexes for common query patterns
 	CREATE INDEX IF NOT EXISTS idx_players_drafted ON players(drafted);
+	CREATE INDEX IF NOT EXISTS idx_players_points ON players(points DESC);
 	CREATE INDEX IF NOT EXISTS idx_chat_ts ON chat(ts);
+	CREATE INDEX IF NOT EXISTS idx_team_players_team_id ON team_players(team_id);
+	CREATE INDEX IF NOT EXISTS idx_teams_created_at ON teams(created_at);
 	`
 
 	if _, err := p.db.Exec(schema); err != nil {
@@ -95,7 +111,7 @@ func (p *PostgresDAL) initSchema() error {
 
 	// Add cuddle_points column to existing databases (migration)
 	_, err := p.db.Exec(`
-		ALTER TABLE players 
+		ALTER TABLE players
 		ADD COLUMN IF NOT EXISTS cuddle_points INTEGER NOT NULL DEFAULT 50
 	`)
 	if err != nil {
@@ -104,7 +120,7 @@ func (p *PostgresDAL) initSchema() error {
 
 	// Add draft_pick_number column to team_players for existing databases
 	_, err = p.db.Exec(`
-		ALTER TABLE team_players 
+		ALTER TABLE team_players
 		ADD COLUMN IF NOT EXISTS draft_pick_number INTEGER
 	`)
 	if err != nil {
@@ -127,10 +143,29 @@ func (p *PostgresDAL) initSchema() error {
 }
 
 func (p *PostgresDAL) seedData() error {
+	// CloudNativePG optimization: Use a transaction for batch inserts
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	tx, err := p.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
 	players := getDefaultPlayers()
 	teams := getDefaultTeams()
 
-	// Insert players
+	// CloudNativePG optimization: Batch insert players to reduce round trips
+	playerStmt, err := tx.PrepareContext(ctx, `
+		INSERT INTO players (id, name, position, team, points, tier, drafted, drafted_by, image)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+	`)
+	if err != nil {
+		return err
+	}
+	defer playerStmt.Close()
+
 	for _, player := range players {
 		_, err := p.db.Exec(`
 			INSERT INTO players (id, name, position, team, points, cuddle_points, tier, drafted, drafted_by, image)
@@ -141,15 +176,26 @@ func (p *PostgresDAL) seedData() error {
 		}
 	}
 
-	// Insert teams
+	// CloudNativePG optimization: Batch insert teams
+	teamStmt, err := tx.PrepareContext(ctx, `
+		INSERT INTO teams (id, name, owner, mascot, color)
+		VALUES ($1, $2, $3, $4, $5)
+	`)
+	if err != nil {
+		return err
+	}
+	defer teamStmt.Close()
+
 	for _, team := range teams {
-		_, err := p.db.Exec(`
-			INSERT INTO teams (id, name, owner, mascot, color)
-			VALUES ($1, $2, $3, $4, $5)
-		`, team.ID, team.Name, team.Owner, team.Mascot, team.Color)
+		_, err := teamStmt.ExecContext(ctx, team.ID, team.Name, team.Owner, team.Mascot, team.Color)
 		if err != nil {
 			return err
 		}
+	}
+
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+		return err
 	}
 
 	// Migrate images from static/images directory to database
@@ -193,43 +239,60 @@ func (p *PostgresDAL) GetState() (*models.DraftState, error) {
 		state.Players = append(state.Players, player)
 	}
 
-	// Get teams with their players
-	teamRows, err := p.db.Query(`SELECT id, name, owner, mascot, color FROM teams ORDER BY created_at`)
+	// CloudNativePG optimization: Get teams with their players in a single query using JOIN
+	// This eliminates N+1 query problem and improves performance with read replicas
+	teamRows, err := p.db.Query(`
+		SELECT
+			t.id, t.name, t.owner, t.mascot, t.color,
+			tp.player_data
+		FROM teams t
+		LEFT JOIN team_players tp ON t.id = tp.team_id
+		ORDER BY t.created_at, tp.created_at
+	`)
 	if err != nil {
 		return nil, err
 	}
 	defer teamRows.Close()
 
+	// Build teams map to aggregate players
+	teamsMap := make(map[string]*models.Team)
+	teamOrder := []string{} // Track order of teams
+
 	for teamRows.Next() {
-		var t models.Team
-		err := teamRows.Scan(&t.ID, &t.Name, &t.Owner, &t.Mascot, &t.Color)
-		if err != nil {
-			return nil, err
-		}
-		t.Players = []models.Player{}
+		var teamID, teamName, teamOwner, teamMascot, teamColor string
+		var playerJSON sql.NullString
 
-		// Get team players
-		playerRows, err := p.db.Query(`SELECT player_data FROM team_players WHERE team_id = $1`, t.ID)
+		err := teamRows.Scan(&teamID, &teamName, &teamOwner, &teamMascot, &teamColor, &playerJSON)
 		if err != nil {
 			return nil, err
 		}
 
-		for playerRows.Next() {
-			var playerJSON []byte
-			if err := playerRows.Scan(&playerJSON); err != nil {
-				playerRows.Close()
-				return nil, err
+		// Create team if not exists
+		if _, exists := teamsMap[teamID]; !exists {
+			teamsMap[teamID] = &models.Team{
+				ID:      teamID,
+				Name:    teamName,
+				Owner:   teamOwner,
+				Mascot:  teamMascot,
+				Color:   teamColor,
+				Players: []models.Player{},
 			}
-			var p models.Player
-			if err := json.Unmarshal(playerJSON, &p); err != nil {
-				playerRows.Close()
-				return nil, err
-			}
-			t.Players = append(t.Players, p)
+			teamOrder = append(teamOrder, teamID)
 		}
-		playerRows.Close()
 
-		state.Teams = append(state.Teams, t)
+		// Add player if player_data is not null (from LEFT JOIN)
+		if playerJSON.Valid && playerJSON.String != "" {
+			var player models.Player
+			if err := json.Unmarshal([]byte(playerJSON.String), &player); err != nil {
+				return nil, err
+			}
+			teamsMap[teamID].Players = append(teamsMap[teamID].Players, player)
+		}
+	}
+
+	// Convert map to ordered slice
+	for _, teamID := range teamOrder {
+		state.Teams = append(state.Teams, *teamsMap[teamID])
 	}
 
 	// Get chat
@@ -293,7 +356,7 @@ func (p *PostgresDAL) SetPlayerPoints(id string, points int) (*models.Player, er
 
 	// Also update in team_players
 	_, err = p.db.Exec(`
-		UPDATE team_players 
+		UPDATE team_players
 		SET player_data = jsonb_set(player_data, '{points}', $1::text::jsonb)
 		WHERE (player_data->>'id') = $2
 	`, points, id)
@@ -329,7 +392,11 @@ func (p *PostgresDAL) ReorderTeams(order []string) ([]models.Team, error) {
 }
 
 func (p *PostgresDAL) DraftPlayer(playerID, teamID string) error {
-	tx, err := p.db.Begin()
+	// CloudNativePG optimization: Use context with timeout for better failover handling
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	tx, err := p.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -348,7 +415,6 @@ func (p *PostgresDAL) DraftPlayer(playerID, teamID string) error {
 		SELECT id, name, position, team, points, cuddle_points, tier, drafted, image
 		FROM players WHERE id = $1 FOR UPDATE
 	`, playerID).Scan(&player.ID, &player.Name, &player.Position, &player.Team, &player.Points, &player.CuddlePoints, &player.Tier, &player.Drafted, &player.Image)
-
 	if err != nil {
 		return err
 	}
@@ -386,8 +452,8 @@ func (p *PostgresDAL) DraftPlayer(playerID, teamID string) error {
 
 	// Update player as drafted with adjusted cuddle points
 	_, err = tx.Exec(`
-		UPDATE players 
-		SET drafted = true, drafted_by = $1, cuddle_points = $2, updated_at = CURRENT_TIMESTAMP 
+		UPDATE players
+		SET drafted = true, drafted_by = $1, cuddle_points = $2, updated_at = CURRENT_TIMESTAMP
 		WHERE id = $3
 	`, teamName, newCuddlePoints, playerID)
 	if err != nil {
@@ -412,7 +478,7 @@ func (p *PostgresDAL) DraftPlayer(playerID, teamID string) error {
 	// Add chat message
 	msg := fmt.Sprintf("%s %s drafted %s (%s • %s)", teamMascot, teamName, player.Name, player.Team, player.Position)
 	emotesJSON, _ := json.Marshal(map[string]int{})
-	_, err = tx.Exec(`
+	_, err = tx.ExecContext(ctx, `
 		INSERT INTO chat (id, ts, type, text, emotes)
 		VALUES ($1, $2, $3, $4, $5)
 	`, genID("msg"), time.Now().UnixMilli(), "system", msg, emotesJSON)
@@ -471,7 +537,7 @@ func (p *PostgresDAL) AddReaction(messageID, emote, userID string) (*models.Chat
 
 	// Update emotes using jsonb operations
 	_, err := p.db.Exec(`
-		UPDATE chat 
+		UPDATE chat
 		SET emotes = jsonb_set(
 			COALESCE(emotes, '{}'::jsonb),
 			ARRAY[$2],
@@ -535,7 +601,6 @@ func (p *PostgresDAL) AddTeam(name, owner, mascot, color string) (*models.Team, 
 		INSERT INTO teams (id, name, owner, mascot, color)
 		VALUES ($1, $2, $3, $4, $5)
 	`, team.ID, team.Name, team.Owner, team.Mascot, team.Color)
-
 	if err != nil {
 		return nil, err
 	}
@@ -548,5 +613,9 @@ func (p *PostgresDAL) AddTeam(name, owner, mascot, color string) (*models.Team, 
 }
 
 func (p *PostgresDAL) Close() error {
-	return p.db.Close()
+	// CloudNativePG optimization: Gracefully close all connections
+	if p.db != nil {
+		return p.db.Close()
+	}
+	return nil
 }

@@ -1,32 +1,34 @@
 {{ define "content" }}
-<div class="container mx-auto px-4 py-8">
-    <div class="mb-8">
-        <h1 class="text-4xl font-bold bg-gradient-to-r from-pink-500 to-purple-600 bg-clip-text text-transparent mb-2">
-            Admin Panel
+<div class="container mx-auto px-4 py-8 relative">
+    <!-- Decorative elements -->
+    <div class="absolute top-10 right-10 text-5xl opacity-10 animate-float">⚽</div>
+    <div class="absolute bottom-10 left-10 text-5xl opacity-10 animate-bounce-slow">🧸</div>
+    
+    <div class="mb-10 relative z-10">
+        <h1 class="text-5xl font-display font-bold text-gradient-jellycat mb-3">
+            ✨ Admin Panel ✨
         </h1>
-        <p class="text-gray-600">Manage Jellycats and draft settings</p>
+        <p class="text-gray-700 text-lg font-display">Manage Jellycats and draft settings</p>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
         <!-- Add New Jellycat -->
-        <div class="border-2 border-pink-200 rounded-lg bg-white">
-            <div class="bg-gradient-to-r from-pink-100 to-purple-100 p-4 rounded-t-lg">
-                <h2 class="font-bold text-xl">Add New Jellycat</h2>
+        <div class="card-jellycat shadow-soft-lg">
+            <div class="bg-gradient-to-r from-pink-100 via-purple-100 to-blue-100 p-6 rounded-t-2xl">
+                <h2 class="font-display font-bold text-2xl text-gradient-jellycat">🧸 Add New Jellycat</h2>
             </div>
             <div class="p-6">
                 <form hx-post="/api/players/add" hx-swap="none" onsubmit="this.reset(); alert('Jellycat added!');">
-                    <div class="space-y-4">
+                    <div class="space-y-5">
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Name</label>
-                            <input type="text" name="name" required
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500">
+                            <label class="block text-sm font-semibold text-gray-800 mb-2 font-display">Name</label>
+                            <input type="text" name="name" required class="input-jellycat">
                         </div>
                         
                         <div class="grid grid-cols-2 gap-4">
                             <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Position</label>
-                                <select name="position" required
-                                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500">
+                                <label class="block text-sm font-semibold text-gray-800 mb-2 font-display">Position</label>
+                                <select name="position" required class="input-jellycat">
                                     <option value="CC">CC - Cuddle Companion</option>
                                     <option value="SS">SS - Snuggle Specialist</option>
                                     <option value="HH">HH - Hug Hero</option>
@@ -35,9 +37,8 @@
                             </div>
                             
                             <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Tier</label>
-                                <select name="tier" required
-                                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500">
+                                <label class="block text-sm font-semibold text-gray-800 mb-2 font-display">Tier</label>
+                                <select name="tier" required class="input-jellycat">
                                     <option value="S">S - Supreme</option>
                                     <option value="A">A - Amazing</option>
                                     <option value="B">B - Brilliant</option>
@@ -47,26 +48,22 @@
                         </div>
                         
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Team</label>
-                            <input type="text" name="team" required placeholder="e.g. Woodland, Safari"
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500">
+                            <label class="block text-sm font-semibold text-gray-800 mb-2 font-display">Team</label>
+                            <input type="text" name="team" required placeholder="e.g. Woodland, Safari" class="input-jellycat">
                         </div>
                         
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Cuddle Points</label>
-                            <input type="number" name="points" min="0" required
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500">
+                            <label class="block text-sm font-semibold text-gray-800 mb-2 font-display">Cuddle Points</label>
+                            <input type="number" name="points" min="0" required class="input-jellycat">
                         </div>
                         
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Image URL</label>
-                            <input type="text" name="image" placeholder="/static/images/jellycat-name.png"
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500">
+                            <label class="block text-sm font-semibold text-gray-800 mb-2 font-display">Image URL</label>
+                            <input type="text" name="image" placeholder="/static/images/jellycat-name.png" class="input-jellycat">
                         </div>
                         
-                        <button type="submit"
-                                class="w-full bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-semibold py-2 rounded-md">
-                            Add Jellycat
+                        <button type="submit" class="btn-jellycat w-full">
+                            ➕ Add Jellycat
                         </button>
                     </div>
                 </form>
@@ -74,14 +71,15 @@
         </div>
 
         <!-- Draft Controls -->
-        <div class="border-2 border-purple-200 rounded-lg bg-white">
-            <div class="bg-gradient-to-r from-purple-100 to-pink-100 p-4 rounded-t-lg">
-                <h2 class="font-bold text-xl">Draft Controls</h2>
+        <div class="card-jellycat shadow-soft-lg">
+            <div class="bg-gradient-to-r from-purple-100 via-pink-100 to-purple-100 p-6 rounded-t-2xl">
+                <h2 class="font-display font-bold text-2xl text-gradient-jellycat">⚙️ Draft Controls</h2>
             </div>
-            <div class="p-6 space-y-4">
-                <div class="p-4 bg-yellow-50 border border-yellow-200 rounded-md">
-                    <p class="text-sm text-yellow-800">
-                        <strong>⚠️ Warning:</strong> Resetting the draft will clear all picks and restore default teams and players.
+            <div class="p-6 space-y-5">
+                <div class="p-5 bg-gradient-to-br from-yellow-50 to-orange-50 border-2 border-yellow-300 rounded-2xl">
+                    <p class="text-sm text-yellow-900 font-display">
+                        <strong class="text-lg">⚠️ Warning:</strong><br>
+                        Resetting the draft will clear all picks and restore default teams and players.
                     </p>
                 </div>
                 
@@ -89,61 +87,60 @@
                         hx-confirm="Are you sure you want to reset the draft? This cannot be undone."
                         hx-swap="none"
                         onclick="setTimeout(() => window.location.reload(), 500)"
-                        class="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-3 rounded-md">
-                    Reset Draft
+                        class="w-full px-6 py-4 rounded-3xl font-bold text-white bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 shadow-soft-lg hover:shadow-soft-xl transition-all duration-300 hover:scale-105">
+                    🔄 Reset Draft
                 </button>
                 
-                <a href="/draft" class="block w-full text-center bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-md">
-                    Go to Draft
+                <a href="/draft" class="block w-full text-center px-6 py-4 rounded-3xl font-bold text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-soft-lg hover:shadow-soft-xl transition-all duration-300 hover:scale-105">
+                    🧸 Go to Draft
                 </a>
             </div>
         </div>
     </div>
 
     <!-- Current Players -->
-    <div class="border-2 border-pink-200 rounded-lg bg-white">
-        <div class="bg-gradient-to-r from-pink-100 to-purple-100 p-4 rounded-t-lg">
-            <h2 class="font-bold text-xl">Current Jellycats</h2>
+    <div class="card-jellycat shadow-soft-lg">
+        <div class="bg-gradient-to-r from-pink-100 via-purple-100 to-blue-100 p-6 rounded-t-2xl">
+            <h2 class="font-display font-bold text-2xl text-gradient-jellycat">🌟 Current Jellycats</h2>
         </div>
         <div class="p-6">
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                 {{ range .Players }}
-                <div class="border rounded-lg p-4 {{ if .Drafted }}bg-gray-50 opacity-60{{ else }}bg-white{{ end }}">
+                <div class="border-2 border-pink-200 rounded-2xl p-5 {{ if .Drafted }}bg-gray-50 opacity-70{{ else }}bg-white hover:shadow-soft-lg{{ end }} transition-all duration-300">
                     <div class="flex items-center gap-3 mb-3">
                         <img src="{{ .Image }}" alt="{{ .Name }}" 
-                             class="w-16 h-16 rounded-lg object-cover border-2 border-pink-200"
+                             class="w-20 h-20 rounded-2xl object-cover border-2 border-pink-200 shadow-soft"
                              onerror="this.src='/static/images/placeholder.png'">
                         <div class="flex-1">
-                            <div class="font-semibold text-sm">{{ .Name }}</div>
-                            <div class="text-xs text-gray-600">{{ .Team }}</div>
+                            <div class="font-bold text-sm font-display text-gray-800">{{ .Name }}</div>
+                            <div class="text-xs text-gray-600 mt-1">{{ .Team }}</div>
                             {{ if .Drafted }}
-                            <div class="text-xs text-purple-600 font-medium mt-1">
+                            <div class="text-xs text-purple-700 font-semibold mt-2 px-2 py-1 bg-purple-100 rounded-full inline-block">
                                 Drafted by {{ .DraftedBy }}
                             </div>
                             {{ end }}
                         </div>
                     </div>
                     
-                    <div class="flex items-center justify-between mb-2">
-                        <span class="px-2 py-1 rounded text-xs font-medium border
-                            {{ if eq .Position "CC" }}bg-pink-100 text-pink-700 border-pink-200
-                            {{ else if eq .Position "SS" }}bg-purple-100 text-purple-700 border-purple-200
-                            {{ else if eq .Position "HH" }}bg-blue-100 text-blue-700 border-blue-200
-                            {{ else }}bg-green-100 text-green-700 border-green-200{{ end }}">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="px-3 py-1.5 rounded-full text-xs font-semibold border-2
+                            {{ if eq .Position "CC" }}bg-pink-100 text-pink-700 border-pink-300
+                            {{ else if eq .Position "SS" }}bg-purple-100 text-purple-700 border-purple-300
+                            {{ else if eq .Position "HH" }}bg-blue-100 text-blue-700 border-blue-300
+                            {{ else }}bg-green-100 text-green-700 border-green-300{{ end }}">
                             {{ .Position }}
                         </span>
-                        <span class="px-2 py-1 rounded text-xs font-medium
-                            {{ if eq .Tier "S" }}bg-yellow-200 text-yellow-800
-                            {{ else if eq .Tier "A" }}bg-green-200 text-green-800
-                            {{ else if eq .Tier "B" }}bg-blue-200 text-blue-800
+                        <span class="px-3 py-1.5 rounded-full text-xs font-bold
+                            {{ if eq .Tier "S" }}bg-yellow-200 text-yellow-900
+                            {{ else if eq .Tier "A" }}bg-green-200 text-green-900
+                            {{ else if eq .Tier "B" }}bg-blue-200 text-blue-900
                             {{ else }}bg-gray-200 text-gray-800{{ end }}">
                             Tier {{ .Tier }}
                         </span>
                     </div>
                     
                     <div class="text-center">
-                        <div class="text-lg font-bold text-purple-600">{{ .Points }}</div>
-                        <div class="text-xs text-gray-500">Cuddle Points</div>
+                        <div class="cuddle-badge text-base">{{ .Points }} Points</div>
                     </div>
                 </div>
                 {{ end }}
