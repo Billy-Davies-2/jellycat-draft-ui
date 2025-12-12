@@ -386,7 +386,18 @@ protoc --go_out=. --go_opt=paths=source_relative \
 
 The application uses TailwindCSS v4 with a custom Jellycat-inspired design system.
 
-If you modify TailwindCSS styles in `static/css/input.css` or `tailwind.config.js`:
+### Docker Build (Automatic)
+
+TailwindCSS styles are **automatically compiled** during the Docker build process. No manual steps needed!
+
+The Dockerfile:
+1. Downloads the TailwindCSS standalone CLI
+2. Compiles `static/css/input.css` → `static/css/styles.css`
+3. Includes the compiled CSS in the final image
+
+### Local Development (Manual)
+
+If you modify TailwindCSS styles in `static/css/input.css` or `tailwind.config.js` locally:
 
 ```bash
 # Download TailwindCSS CLI (one time)

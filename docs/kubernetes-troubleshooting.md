@@ -36,7 +36,7 @@ echo
 # Update the secret with connect_timeout parameter
 # Example format: postgres://user:password@host:5432/db?sslmode=require&connect_timeout=60
 kubectl patch secret jellycat-draft-auth-secrets -n default --type='json' \
-  -p='[{"op": "replace", "path": "/data/DATABASE_URL", "value": "'$(echo -n "postgres://jellycat-draft:PASSWORD@jellycat-draft-db-rw.default.svc.cluster.local:5432/jellycat-draft?sslmode=require&connect_timeout=60" | base64 -w0)'"}]'
+  -p='[{"op": "replace", "path": "/data/DATABASE_URL", "value": "'$(echo -n "postgres://jellycat-draft:YOUR_PASSWORD@jellycat-draft-db-rw.default.svc.cluster.local:5432/jellycat-draft?sslmode=require&connect_timeout=60" | base64 -w0)'"}]'
 ```
 
 **Solution 2: Verify CloudNativePG Service Name**
@@ -145,9 +145,9 @@ If your password contains special characters, they must be URL-encoded:
 | `?` | `%3F` | `what?` → `what%3F` |
 | `#` | `%23` | `tag#1` → `tag%231` |
 
-Example with encoded password:
+Example with encoded password (replace with your actual password):
 ```
-postgres://jellycat-draft:%2Fdnt7b6tPjM%3D@jellycat-draft-db-rw.default.svc.cluster.local:5432/jellycat-draft?sslmode=require&connect_timeout=60
+postgres://jellycat-draft:%2FYOUR_ENCODED_PASSWORD%3D@jellycat-draft-db-rw.default.svc.cluster.local:5432/jellycat-draft?sslmode=require&connect_timeout=60
 ```
 
 ## Pod Startup Failures
@@ -271,8 +271,8 @@ kubectl logs -n default -l app.kubernetes.io/name=jellycat-ui --tail=100
 APP_POD=$(kubectl get pods -n default -l app.kubernetes.io/name=jellycat-ui -o jsonpath='{.items[0].metadata.name}')
 kubectl exec -n default $APP_POD -- nc -zv jellycat-draft-db-rw.default.svc.cluster.local 5432
 
-# Test database login
-kubectl exec -n default $APP_POD -- psql "postgres://jellycat-draft:PASSWORD@jellycat-draft-db-rw.default.svc.cluster.local:5432/jellycat-draft?sslmode=require" -c "SELECT 1"
+# Test database login (replace YOUR_PASSWORD with actual password)
+kubectl exec -n default $APP_POD -- psql "postgres://jellycat-draft:YOUR_PASSWORD@jellycat-draft-db-rw.default.svc.cluster.local:5432/jellycat-draft?sslmode=require" -c "SELECT 1"
 ```
 
 ## Getting More Help
