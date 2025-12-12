@@ -41,7 +41,7 @@ A realtime fantasy draft application for Jellycat plush toys, built with **Go**,
 ### Prerequisites
 
 - Go 1.24 or higher
-- PostgreSQL database (or use memory/SQLite for development)
+- PostgreSQL database 12-18+ (or use memory/SQLite for development)
 - NATS server with JetStream (optional - mock is used in development)
 - ClickHouse server (optional - mock is used in development)
 - Authentik OAuth2 provider
@@ -289,7 +289,7 @@ For production Kubernetes deployments with PostgreSQL using the CloudNativePG op
 - **[Kubernetes CloudNativePG Guide](docs/kubernetes-cloudnative-pg.md)** - Complete guide for deploying on Kubernetes with high availability PostgreSQL
 - **[Kubernetes Troubleshooting Guide](docs/kubernetes-troubleshooting.md)** - Solutions for common Kubernetes deployment issues (DNS timeouts, connection errors, etc.)
 
-The application is fully compatible with CloudNativePG (PostgreSQL 12-17) without any code modifications.
+The application is fully compatible with CloudNativePG (PostgreSQL 12-18+) without any code changes.
 
 **Important**: The application includes automatic retry logic (5 retries with 60s timeout each) to handle DNS resolution delays during Kubernetes pod startup. Ensure your DATABASE_URL includes `connect_timeout=60`.
 

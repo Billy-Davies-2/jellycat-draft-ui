@@ -15,7 +15,7 @@ This guide covers setting up and bootstrapping the PostgreSQL database for the J
 
 ## Prerequisites
 
-- PostgreSQL 12 or higher
+- PostgreSQL 12-18+
 - Access to create databases and users
 - Go 1.24+ (for running the application)
 
@@ -52,7 +52,7 @@ docker run --name jellycat-postgres \
   -e POSTGRES_USER=jellycatuser \
   -e POSTGRES_DB=jellycatdraft \
   -p 5432:5432 \
-  -d postgres:15
+  -d postgres:18
 ```
 
 ## Schema Initialization
@@ -432,7 +432,7 @@ For deploying PostgreSQL on Kubernetes using the CloudNativePG operator, see:
 
 - **[Kubernetes with CloudNativePG Guide](kubernetes-cloudnative-pg.md)** - Comprehensive guide for deploying on Kubernetes with CloudNativePG operator
 
-The application is fully compatible with CloudNativePG (PostgreSQL 12-17) with no code changes required.
+The application is fully compatible with CloudNativePG (PostgreSQL 12-18+) with no code changes required.
 
 ## Additional Resources
 
