@@ -30,3 +30,6 @@ jellycat-draft
 *.sqlite
 tailwindcss-linux-x64
 protoc-*.zip
+
+# Go binaries
+/app
