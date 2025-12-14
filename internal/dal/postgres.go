@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -173,7 +174,6 @@ func (p *PostgresDAL) seedData() error {
 	defer tx.Rollback()
 
 	players := getDefaultPlayers()
-	teams := getDefaultTeams()
 
 	// CloudNativePG optimization: Batch insert players to reduce round trips
 	playerStmt, err := tx.PrepareContext(ctx, `
@@ -195,20 +195,25 @@ func (p *PostgresDAL) seedData() error {
 		}
 	}
 
-	// CloudNativePG optimization: Batch insert teams
-	teamStmt, err := tx.PrepareContext(ctx, `
-		INSERT INTO teams (id, name, owner, mascot, color)
-		VALUES ($1, $2, $3, $4, $5)
-	`)
-	if err != nil {
-		return err
-	}
-	defer teamStmt.Close()
+	// Only insert default teams in development mode
+	if IsDevEnvironment() {
+		teams := getDefaultTeams()
 
-	for _, team := range teams {
-		_, err := teamStmt.ExecContext(ctx, team.ID, team.Name, team.Owner, team.Mascot, team.Color)
+		// CloudNativePG optimization: Batch insert teams
+		teamStmt, err := tx.PrepareContext(ctx, `
+			INSERT INTO teams (id, name, owner, mascot, color)
+			VALUES ($1, $2, $3, $4, $5)
+		`)
 		if err != nil {
 			return err
+		}
+		defer teamStmt.Close()
+
+		for _, team := range teams {
+			_, err := teamStmt.ExecContext(ctx, team.ID, team.Name, team.Owner, team.Mascot, team.Color)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -712,10 +717,88 @@ func (p *PostgresDAL) AddTeam(name, owner, mascot, color string) (*models.Team, 
 	return team, nil
 }
 
-func (p *PostgresDAL) Close() error {
-	// CloudNativePG optimization: Gracefully close all connections
-	if p.db != nil {
-		return p.db.Close()
+func (p *PostgresDAL) UpdateTeam(id, name, owner, mascot, color string) (*models.Team, error) {
+	// Build the UPDATE query dynamically based on non-empty fields
+	query := "UPDATE teams SET "
+	args := []interface{}{}
+	updates := []string{}
+	paramIdx := 1
+
+	if name != "" {
+		updates = append(updates, fmt.Sprintf("name = $%d", paramIdx))
+		args = append(args, name)
+		paramIdx++
 	}
+	if owner != "" {
+		updates = append(updates, fmt.Sprintf("owner = $%d", paramIdx))
+		args = append(args, owner)
+		paramIdx++
+	}
+	if mascot != "" {
+		updates = append(updates, fmt.Sprintf("mascot = $%d", paramIdx))
+		args = append(args, mascot)
+		paramIdx++
+	}
+	if color != "" {
+		updates = append(updates, fmt.Sprintf("color = $%d", paramIdx))
+		args = append(args, color)
+		paramIdx++
+	}
+
+	if len(updates) == 0 {
+		return nil, fmt.Errorf("no fields to update")
+	}
+
+	query += strings.Join(updates, ", ")
+	query += fmt.Sprintf(" WHERE id = $%d", paramIdx)
+	args = append(args, id)
+
+	result, err := p.db.Exec(query, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		return nil, fmt.Errorf("team not found")
+	}
+
+	// Fetch and return the updated team
+	var team models.Team
+	err = p.db.QueryRow(`
+		SELECT id, name, owner, mascot, color
+		FROM teams WHERE id = $1
+	`, id).Scan(&team.ID, &team.Name, &team.Owner, &team.Mascot, &team.Color)
+	if err != nil {
+		return nil, err
+	}
+	team.Players = []models.Player{}
+
+	return &team, nil
+}
+
+func (p *PostgresDAL) DeleteTeam(id string) error {
+	// Check if team has drafted players
+	var count int
+	err := p.db.QueryRow(`
+		SELECT COUNT(*) FROM players WHERE drafted_by = $1
+	`, id).Scan(&count)
+	if err != nil {
+		return err
+	}
+	if count > 0 {
+		return fmt.Errorf("cannot delete a team that has drafted players")
+	}
+
+	result, err := p.db.Exec("DELETE FROM teams WHERE id = $1", id)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		return fmt.Errorf("team not found")
+	}
+
 	return nil
 }

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -135,7 +136,6 @@ func (s *SQLiteDAL) initSchema() error {
 
 func (s *SQLiteDAL) seedData() error {
 	players := getDefaultPlayers()
-	teams := getDefaultTeams()
 
 	// Insert players
 	for _, p := range players {
@@ -148,14 +148,17 @@ func (s *SQLiteDAL) seedData() error {
 		}
 	}
 
-	// Insert teams
-	for _, t := range teams {
-		_, err := s.db.Exec(`
-			INSERT INTO teams (id, name, owner, mascot, color)
-			VALUES (?, ?, ?, ?, ?)
-		`, t.ID, t.Name, t.Owner, t.Mascot, t.Color)
-		if err != nil {
-			return err
+	// Only insert default teams in development mode
+	if IsDevEnvironment() {
+		teams := getDefaultTeams()
+		for _, t := range teams {
+			_, err := s.db.Exec(`
+				INSERT INTO teams (id, name, owner, mascot, color)
+				VALUES (?, ?, ?, ?, ?)
+			`, t.ID, t.Name, t.Owner, t.Mascot, t.Color)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -689,6 +692,83 @@ func (s *SQLiteDAL) AddTeam(name, owner, mascot, color string) (*models.Team, er
 	return team, nil
 }
 
-func (s *SQLiteDAL) Close() error {
-	return s.db.Close()
+func (s *SQLiteDAL) UpdateTeam(id, name, owner, mascot, color string) (*models.Team, error) {
+	// Build the UPDATE query dynamically based on non-empty fields
+	query := "UPDATE teams SET "
+	args := []interface{}{}
+	updates := []string{}
+
+	if name != "" {
+		updates = append(updates, "name = ?")
+		args = append(args, name)
+	}
+	if owner != "" {
+		updates = append(updates, "owner = ?")
+		args = append(args, owner)
+	}
+	if mascot != "" {
+		updates = append(updates, "mascot = ?")
+		args = append(args, mascot)
+	}
+	if color != "" {
+		updates = append(updates, "color = ?")
+		args = append(args, color)
+	}
+
+	if len(updates) == 0 {
+		return nil, fmt.Errorf("no fields to update")
+	}
+
+	query += strings.Join(updates, ", ")
+	query += " WHERE id = ?"
+	args = append(args, id)
+
+	result, err := s.db.Exec(query, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		return nil, fmt.Errorf("team not found")
+	}
+
+	// Fetch and return the updated team
+	var team models.Team
+	err = s.db.QueryRow(`
+		SELECT id, name, owner, mascot, color
+		FROM teams WHERE id = ?
+	`, id).Scan(&team.ID, &team.Name, &team.Owner, &team.Mascot, &team.Color)
+	if err != nil {
+		return nil, err
+	}
+	team.Players = []models.Player{}
+
+	return &team, nil
+}
+
+func (s *SQLiteDAL) DeleteTeam(id string) error {
+	// Check if team has drafted players
+	var count int
+	err := s.db.QueryRow(`
+		SELECT COUNT(*) FROM players WHERE drafted_by = ?
+	`, id).Scan(&count)
+	if err != nil {
+		return err
+	}
+	if count > 0 {
+		return fmt.Errorf("cannot delete a team that has drafted players")
+	}
+
+	result, err := s.db.Exec("DELETE FROM teams WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		return fmt.Errorf("team not found")
+	}
+
+	return nil
 }

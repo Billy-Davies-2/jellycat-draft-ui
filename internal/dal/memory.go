@@ -4,11 +4,18 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
 	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/models"
 )
+
+// IsDevEnvironment returns true if running in development mode
+func IsDevEnvironment() bool {
+	env := os.Getenv("ENVIRONMENT")
+	return env == "" || env == "development"
+}
 
 // MemoryDAL implements DraftDAL using in-memory storage
 type MemoryDAL struct {
@@ -21,9 +28,16 @@ type MemoryDAL struct {
 
 // NewMemoryDAL creates a new in-memory data access layer
 func NewMemoryDAL() *MemoryDAL {
+	var teams []models.Team
+	if IsDevEnvironment() {
+		teams = getDefaultTeams()
+	} else {
+		teams = []models.Team{}
+	}
+
 	dal := &MemoryDAL{
 		players:       getDefaultPlayers(),
-		teams:         getDefaultTeams(),
+		teams:         teams,
 		chat:          []models.ChatMessage{},
 		reactionUsers: make(map[string]map[string]map[string]bool),
 	}
@@ -61,8 +75,15 @@ func (m *MemoryDAL) Reset() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	var teams []models.Team
+	if IsDevEnvironment() {
+		teams = getDefaultTeams()
+	} else {
+		teams = []models.Team{}
+	}
+
 	m.players = getDefaultPlayers()
-	m.teams = getDefaultTeams()
+	m.teams = teams
 	m.chat = []models.ChatMessage{}
 	m.reactionUsers = make(map[string]map[string]map[string]bool)
 
@@ -368,6 +389,49 @@ func (m *MemoryDAL) AddTeam(name, owner, mascot, color string) (*models.Team, er
 	m.addChatMessageUnsafe(msg, "system")
 
 	return team, nil
+}
+
+func (m *MemoryDAL) UpdateTeam(id, name, owner, mascot, color string) (*models.Team, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for i := range m.teams {
+		if m.teams[i].ID == id {
+			if name != "" {
+				m.teams[i].Name = name
+			}
+			if owner != "" {
+				m.teams[i].Owner = owner
+			}
+			if mascot != "" {
+				m.teams[i].Mascot = mascot
+			}
+			if color != "" {
+				m.teams[i].Color = color
+			}
+			return &m.teams[i], nil
+		}
+	}
+
+	return nil, fmt.Errorf("team not found")
+}
+
+func (m *MemoryDAL) DeleteTeam(id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for i := range m.teams {
+		if m.teams[i].ID == id {
+			// Cannot delete a team that has drafted players
+			if len(m.teams[i].Players) > 0 {
+				return fmt.Errorf("cannot delete a team that has drafted players")
+			}
+			m.teams = append(m.teams[:i], m.teams[i+1:]...)
+			return nil
+		}
+	}
+
+	return fmt.Errorf("team not found")
 }
 
 func genID(prefix string) string {

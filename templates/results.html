@@ -1,0 +1,177 @@
+{{ define "content" }}
+<div class="container mx-auto px-4 py-8 relative" x-data="resultsApp()" x-init="init()">
+    <!-- Decorative elements -->
+    <div class="absolute top-10 right-10 text-6xl opacity-20 animate-float-slow">🏆</div>
+    <div class="absolute bottom-20 left-20 text-5xl opacity-20 animate-bounce-slow">🧸</div>
+    <div class="absolute top-1/3 left-10 text-4xl opacity-15 animate-float">🏈</div>
+    
+    <!-- Confetti Animation -->
+    <div class="fixed inset-0 pointer-events-none overflow-hidden z-50" id="confetti-container"></div>
+    
+    <!-- Header -->
+    <div class="text-center mb-12 relative z-10">
+        <div class="flex justify-center items-center gap-4 mb-6">
+            <div class="text-6xl animate-bounce-slow">🎉</div>
+            <h1 class="text-5xl font-display font-bold text-gradient-jellycat">
+                Draft Complete!
+            </h1>
+            <div class="text-6xl animate-bounce-slow">🎉</div>
+        </div>
+        <p class="text-2xl text-gray-700 font-display">
+            All Jellycats have found their forever teams! 🧸💕
+        </p>
+    </div>
+
+    <!-- Winner Section -->
+    {{ if .Winner }}
+    <div class="max-w-2xl mx-auto mb-12">
+        <div class="card-jellycat shadow-soft-lg overflow-hidden">
+            <div class="bg-gradient-to-r from-yellow-200 via-yellow-300 to-yellow-200 p-8 text-center relative">
+                <div class="absolute top-2 left-2 text-4xl animate-pulse-soft">⭐</div>
+                <div class="absolute top-2 right-2 text-4xl animate-pulse-soft">⭐</div>
+                <div class="text-6xl mb-4">👑</div>
+                <h2 class="font-display font-bold text-3xl text-yellow-900 mb-2">Champion Team!</h2>
+                <div class="text-5xl font-display font-bold text-yellow-800">{{ .Winner.Name }}</div>
+                <div class="text-xl text-yellow-900 mt-2">{{ .Winner.Mascot }} • Owner: {{ .Winner.Owner }}</div>
+                <div class="mt-4 text-2xl font-bold text-yellow-900">
+                    🏆 {{ .Winner.TotalPoints }} Total Cuddle Points 🏆
+                </div>
+            </div>
+        </div>
+    </div>
+    {{ end }}
+
+    <!-- Final Standings -->
+    <div class="mb-12">
+        <h2 class="text-3xl font-display font-bold text-center text-gradient-jellycat mb-8">
+            🏅 Final Standings 🏅
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {{ range $index, $team := .Teams }}
+            <div class="card-jellycat {{ $team.Color }} shadow-soft-lg hover:scale-105 transition-all duration-300 relative">
+                {{ if eq $index 0 }}
+                <div class="absolute -top-4 -right-4 text-5xl">🥇</div>
+                {{ else if eq $index 1 }}
+                <div class="absolute -top-4 -right-4 text-4xl">🥈</div>
+                {{ else if eq $index 2 }}
+                <div class="absolute -top-4 -right-4 text-4xl">🥉</div>
+                {{ end }}
+                
+                <div class="{{ $team.Color }} p-5 rounded-t-2xl bg-gradient-to-br from-white/50 to-transparent">
+                    <div class="flex items-center justify-between">
+                        <h3 class="font-display font-bold text-xl flex items-center gap-3">
+                            <span class="text-3xl">{{ $team.Mascot }}</span>
+                            <div>
+                                <div class="text-gray-800">{{ $team.Name }}</div>
+                                <div class="text-sm font-normal text-gray-600 mt-1">Owner: {{ $team.Owner }}</div>
+                            </div>
+                        </h3>
+                        <div class="text-right">
+                            <div class="text-2xl font-bold text-gradient-jellycat">{{ $team.TotalPoints }}</div>
+                            <div class="text-xs text-gray-600">cuddle pts</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="p-5">
+                    {{ if $team.Players }}
+                    <div class="space-y-3">
+                        {{ range $team.Players }}
+                        <div class="flex items-center gap-3 p-3 bg-white rounded-xl border-2 border-pink-200 shadow-soft">
+                            <img src="{{ .Image }}" alt="{{ .Name }}" 
+                                 class="w-12 h-12 rounded-xl object-cover border-2 border-pink-200"
+                                 onerror="this.src='/static/images/placeholder.png'">
+                            <div class="flex-1">
+                                <div class="font-semibold text-sm font-display text-gray-800">{{ .Name }}</div>
+                                <div class="text-xs text-gray-600">{{ .Team }} • {{ .Position }}</div>
+                            </div>
+                            <div class="cuddle-badge">{{ .Points }}</div>
+                        </div>
+                        {{ end }}
+                    </div>
+                    {{ else }}
+                    <div class="text-center text-gray-500 py-6">
+                        <div class="text-3xl mb-2">😢</div>
+                        <div class="text-sm font-display">No Jellycats drafted</div>
+                    </div>
+                    {{ end }}
+                </div>
+            </div>
+            {{ end }}
+        </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="flex flex-col sm:flex-row gap-4 justify-center max-w-xl mx-auto">
+        <a href="/draft" class="btn-jellycat text-center flex-1">
+            🧸 Back to Draft
+        </a>
+        <button onclick="shareDraft()" class="btn-jellycat text-center flex-1 bg-gradient-to-r from-blue-400 to-blue-500 hover:from-blue-500 hover:to-blue-600">
+            📤 Share Results
+        </button>
+        <a href="/start" class="px-6 py-3 rounded-3xl border-2 border-pink-300 hover:border-pink-400 text-gray-700 hover:text-pink-600 font-semibold transition-all duration-300 hover:shadow-soft text-center flex-1">
+            🏠 Start Over
+        </a>
+    </div>
+</div>
+
+<script>
+function resultsApp() {
+    return {
+        init() {
+            // Trigger confetti on page load
+            this.createConfetti();
+        },
+        
+        createConfetti() {
+            const container = document.getElementById('confetti-container');
+            const colors = ['#FFB6C1', '#DDA0DD', '#87CEEB', '#98FB98', '#FFD700', '#FFA07A'];
+            const emojis = ['🎉', '🧸', '⭐', '🏈', '💕', '✨'];
+            
+            for (let i = 0; i < 50; i++) {
+                setTimeout(() => {
+                    const confetti = document.createElement('div');
+                    confetti.className = 'absolute text-2xl';
+                    confetti.style.left = Math.random() * 100 + '%';
+                    confetti.style.top = '-50px';
+                    confetti.style.animation = `confetti-fall ${2 + Math.random() * 3}s linear forwards`;
+                    confetti.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+                    container.appendChild(confetti);
+                    
+                    // Remove confetti after animation
+                    setTimeout(() => confetti.remove(), 5000);
+                }, i * 100);
+            }
+        }
+    };
+}
+
+function shareDraft() {
+    const text = 'Check out our Jellycat Fantasy Draft results! 🧸🏈\n\n';
+    if (navigator.share) {
+        navigator.share({
+            title: 'Jellycat Fantasy Draft Results',
+            text: text,
+            url: window.location.href
+        });
+    } else {
+        // Fallback: copy to clipboard
+        navigator.clipboard.writeText(text + window.location.href);
+        alert('Link copied to clipboard! 📋');
+    }
+}
+</script>
+
+<style>
+@keyframes confetti-fall {
+    0% {
+        transform: translateY(0) rotate(0deg);
+        opacity: 1;
+    }
+    100% {
+        transform: translateY(100vh) rotate(720deg);
+        opacity: 0;
+    }
+}
+</style>
+{{ end }}

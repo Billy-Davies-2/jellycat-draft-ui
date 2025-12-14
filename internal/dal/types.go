@@ -15,4 +15,6 @@ type DraftDAL interface {
 	AddChatMessage(text, msgType string) (*models.ChatMessage, error)
 	AddReaction(messageID, emote, userID string) (*models.ChatMessage, error)
 	AddTeam(name, owner, mascot, color string) (*models.Team, error)
+	UpdateTeam(id, name, owner, mascot, color string) (*models.Team, error)
+	DeleteTeam(id string) error
 }

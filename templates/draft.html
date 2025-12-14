@@ -371,30 +371,18 @@ function draftApp() {
             const initialTeamName = "{{ .CurrentTeamName }}";
             const initialPick = {{ .CurrentPick }};
             
-            console.log('[SSE] Creating EventSource connection to /api/events');
-            
-            eventSource.onopen = () => {
-                console.log('[SSE] Connection opened');
-            };
-            
             eventSource.onerror = (e) => {
                 console.error('[SSE] Connection error:', e);
-                console.error('[SSE] ReadyState:', eventSource.readyState);
             };
             
             eventSource.onmessage = (event) => {
-                console.log('[SSE] Received event:', event.data);
                 try {
                     const data = JSON.parse(event.data);
-                    console.log('[SSE] Parsed data:', data);
                     if (data.type === 'draft:pick') {
-                        console.log('[SSE] Processing draft:pick event');
                         // Remove the drafted player from the UI immediately
                         const playerId = data.payload?.playerId;
-                        console.log('[SSE] Player ID to remove:', playerId);
                         if (playerId) {
                             const playerCard = document.querySelector(`[data-player-id="${playerId}"]`);
-                            console.log('[SSE] Found player card:', playerCard);
                             if (playerCard) {
                                 // Animate removal
                                 playerCard.style.transition = 'all 0.3s ease-out';
@@ -412,7 +400,6 @@ function draftApp() {
                         }
                         
                         // Fetch the full updated state to refresh team rosters and pick counter
-                        console.log('[SSE] Calling refreshDraftState()');
                         this.refreshDraftState();
                         this.showNotification('Player drafted! 🎉', 'success');
                     } else if (data.type === 'chat:add') {
@@ -445,21 +432,27 @@ function draftApp() {
         },
         
         async refreshDraftState() {
-            console.log('[refreshDraftState] Starting...');
             try {
                 const response = await fetch('/api/draft/state');
-                console.log('[refreshDraftState] Response status:', response.status);
                 if (!response.ok) {
                     console.error('Failed to fetch draft state:', response.status, response.statusText);
                     this.showNotification('Failed to refresh draft state', 'error');
                     return;
                 }
                 const state = await response.json();
-                console.log('[refreshDraftState] State received:', state);
+                
+                // Check if draft is complete (no more undrafted players)
+                const undraftedPlayers = state.players?.filter(p => !p.drafted) || [];
+                if (undraftedPlayers.length === 0 && state.players?.length > 0) {
+                    this.showNotification('🎉 Draft Complete! Redirecting to results...', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/results';
+                    }, 1500);
+                    return;
+                }
                 
                 // Update the global currentTeamID for the next draft pick
                 if (state.currentTeamId) {
-                    console.log('[refreshDraftState] Updating currentTeamID from', currentTeamID, 'to', state.currentTeamId);
                     currentTeamID = state.currentTeamId;
                 }
                 
@@ -467,9 +460,7 @@ function draftApp() {
                 this.updatePickCounter(state);
                 
                 // Update team rosters
-                console.log('[refreshDraftState] Updating team rosters with', state.teams?.length, 'teams');
                 this.updateTeamRosters(state.teams);
-                console.log('[refreshDraftState] Done');
             } catch (e) {
                 console.error('Failed to refresh draft state:', e);
                 this.showNotification('Failed to refresh draft state', 'error');

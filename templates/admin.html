@@ -112,6 +112,55 @@
         </div>
     </div>
 
+    <!-- Image Upload Section -->
+    <div class="card-jellycat shadow-soft-lg mb-8">
+        <div class="bg-gradient-to-r from-green-100 via-teal-100 to-cyan-100 p-6 rounded-t-2xl">
+            <h2 class="font-display font-bold text-2xl text-gradient-jellycat">📷 Upload Jellycat Images</h2>
+        </div>
+        <div class="p-6">
+            <form id="uploadImageForm" onsubmit="uploadImage(event)" enctype="multipart/form-data">
+                <div class="space-y-5">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-800 mb-2 font-display">Select Image</label>
+                        <input type="file" name="image" accept="image/jpeg,image/png,image/gif,image/webp" required 
+                               class="w-full text-sm text-gray-500
+                                      file:mr-4 file:py-3 file:px-6
+                                      file:rounded-full file:border-0
+                                      file:text-sm file:font-semibold
+                                      file:bg-pink-100 file:text-pink-700
+                                      hover:file:bg-pink-200
+                                      cursor-pointer">
+                        <p class="text-xs text-gray-500 mt-2">Supported formats: JPG, PNG, GIF, WebP (max 10MB)</p>
+                    </div>
+                    
+                    <button type="submit" class="btn-jellycat w-full">
+                        📤 Upload Image
+                    </button>
+                </div>
+            </form>
+            
+            <div id="uploadResult" class="mt-4 hidden">
+                <div class="p-4 bg-green-50 border-2 border-green-200 rounded-2xl">
+                    <p class="text-sm text-green-700 font-display">
+                        <strong>Uploaded!</strong> Use this URL in the Jellycat Image field:
+                    </p>
+                    <code id="uploadedImageUrl" class="block mt-2 p-2 bg-white rounded-lg text-sm font-mono text-gray-700 break-all"></code>
+                    <button onclick="copyImageUrl()" class="mt-2 px-4 py-2 text-sm font-semibold text-blue-700 bg-blue-100 hover:bg-blue-200 rounded-xl transition-all">
+                        📋 Copy URL
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Image Gallery -->
+            <div class="mt-6">
+                <h3 class="font-display font-semibold text-lg text-gray-800 mb-4">📁 Uploaded Images</h3>
+                <div id="imageGallery" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                    <!-- Images will be loaded dynamically -->
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Current Players -->
     <div class="card-jellycat shadow-soft-lg">
         <div class="bg-gradient-to-r from-pink-100 via-purple-100 to-blue-100 p-6 rounded-t-2xl">
@@ -177,6 +226,101 @@
                 </div>
                 {{ end }}
             </div>
+        </div>
+    </div>
+
+    <!-- Manage Teams -->
+    <div class="card-jellycat shadow-soft-lg mt-8">
+        <div class="bg-gradient-to-r from-purple-100 via-pink-100 to-orange-100 p-6 rounded-t-2xl">
+            <h2 class="font-display font-bold text-2xl text-gradient-jellycat">👥 Manage Teams</h2>
+        </div>
+        <div class="p-6">
+            <div id="teams-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                {{ range .Teams }}
+                <div class="border-2 border-purple-200 rounded-2xl p-5 bg-white hover:shadow-soft-lg transition-all duration-300" data-team-id="{{ .ID }}">
+                    <div class="flex items-center gap-3 mb-3">
+                        <span class="text-4xl">{{ .Mascot }}</span>
+                        <div class="flex-1">
+                            <div class="font-bold text-lg font-display text-gray-800">{{ .Name }}</div>
+                            <div class="text-sm text-gray-600">Owner: {{ .Owner }}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="px-3 py-1.5 rounded-full text-xs font-semibold {{ .Color }}">
+                            {{ len .Players }} Players Drafted
+                        </span>
+                        <span class="text-sm font-bold text-purple-700">
+                            {{ .TotalPoints }} pts
+                        </span>
+                    </div>
+                    
+                    <!-- Edit/Delete buttons -->
+                    <div class="flex gap-2 mt-3">
+                        {{ if eq (len .Players) 0 }}
+                        <button onclick="openEditTeamModal('{{ .ID }}', '{{ .Name }}', '{{ .Owner }}', '{{ .Mascot }}')" 
+                                class="flex-1 px-3 py-2 rounded-xl text-sm font-semibold text-blue-700 bg-blue-100 hover:bg-blue-200 border-2 border-blue-300 transition-all duration-200">
+                            ✏️ Edit
+                        </button>
+                        <button onclick="deleteTeam('{{ .ID }}', '{{ .Name }}')" 
+                                class="flex-1 px-3 py-2 rounded-xl text-sm font-semibold text-red-700 bg-red-100 hover:bg-red-200 border-2 border-red-300 transition-all duration-200">
+                            🗑️ Delete
+                        </button>
+                        {{ else }}
+                        <button onclick="openEditTeamModal('{{ .ID }}', '{{ .Name }}', '{{ .Owner }}', '{{ .Mascot }}')" 
+                                class="flex-1 px-3 py-2 rounded-xl text-sm font-semibold text-blue-700 bg-blue-100 hover:bg-blue-200 border-2 border-blue-300 transition-all duration-200">
+                            ✏️ Edit
+                        </button>
+                        <div class="flex-1 text-center text-xs text-gray-500 italic py-2">
+                            Cannot delete
+                        </div>
+                        {{ end }}
+                    </div>
+                </div>
+                {{ end }}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Team Modal -->
+<div id="editTeamModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+        <div class="bg-gradient-to-r from-purple-100 via-pink-100 to-orange-100 p-6 rounded-t-3xl">
+            <div class="flex justify-between items-center">
+                <h2 class="font-display font-bold text-2xl text-gradient-jellycat">✏️ Edit Team</h2>
+                <button onclick="closeEditTeamModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+            </div>
+        </div>
+        <div class="p-6">
+            <form id="editTeamForm" onsubmit="submitEditTeamForm(event)">
+                <input type="hidden" id="editTeamId" name="id">
+                <div class="space-y-5">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-800 mb-2 font-display">Team Name</label>
+                        <input type="text" id="editTeamName" name="name" required class="input-jellycat">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-800 mb-2 font-display">Owner</label>
+                        <input type="text" id="editTeamOwner" name="owner" class="input-jellycat">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-800 mb-2 font-display">Mascot Emoji</label>
+                        <input type="text" id="editTeamMascot" name="mascot" class="input-jellycat" placeholder="🦊">
+                    </div>
+                    
+                    <div class="flex gap-3">
+                        <button type="button" onclick="closeEditTeamModal()" class="flex-1 px-6 py-3 rounded-2xl font-bold text-gray-700 bg-gray-200 hover:bg-gray-300 transition-all duration-200">
+                            Cancel
+                        </button>
+                        <button type="submit" class="flex-1 btn-jellycat">
+                            💾 Save Changes
+                        </button>
+                    </div>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -284,6 +428,24 @@ function adminApp() {
                             }
                         }
                         this.showNotification('Jellycat deleted! 🗑️', 'info');
+                    } else if (data.type === 'teams:update') {
+                        this.showNotification('Team updated! ✨', 'success');
+                        setTimeout(() => window.location.reload(), 500);
+                    } else if (data.type === 'teams:delete') {
+                        const teamId = data.payload?.id;
+                        if (teamId) {
+                            const teamCard = document.querySelector(`[data-team-id="${teamId}"]`);
+                            if (teamCard) {
+                                teamCard.style.transition = 'all 0.3s ease-out';
+                                teamCard.style.opacity = '0';
+                                teamCard.style.transform = 'scale(0.8)';
+                                setTimeout(() => teamCard.remove(), 300);
+                            }
+                        }
+                        this.showNotification('Team deleted! 🗑️', 'info');
+                    } else if (data.type === 'teams:add') {
+                        this.showNotification('New team added! 👥', 'success');
+                        setTimeout(() => window.location.reload(), 500);
                     } else if (data.type === 'draft:reset') {
                         this.showNotification('Draft reset! 🔄', 'info');
                         setTimeout(() => window.location.reload(), 500);
@@ -398,6 +560,94 @@ function adminApp() {
     };
 }
 
+// Image upload functions
+async function uploadImage(event) {
+    event.preventDefault();
+    const form = event.target;
+    const formData = new FormData(form);
+    
+    try {
+        const response = await fetch('/api/images/upload', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            
+            // Show the result
+            document.getElementById('uploadedImageUrl').textContent = result.url;
+            document.getElementById('uploadResult').classList.remove('hidden');
+            
+            // Reset the form
+            form.reset();
+            
+            // Reload the image gallery
+            loadImageGallery();
+        } else {
+            const error = await response.text();
+            alert('Error uploading image: ' + error);
+        }
+    } catch (err) {
+        alert('Error uploading image: ' + err.message);
+    }
+}
+
+function copyImageUrl() {
+    const url = document.getElementById('uploadedImageUrl').textContent;
+    navigator.clipboard.writeText(url).then(() => {
+        alert('URL copied to clipboard!');
+    }).catch(err => {
+        console.error('Failed to copy:', err);
+    });
+}
+
+async function loadImageGallery() {
+    try {
+        const response = await fetch('/api/images/list');
+        if (!response.ok) return;
+        
+        const images = await response.json();
+        const gallery = document.getElementById('imageGallery');
+        
+        if (images.length === 0) {
+            gallery.innerHTML = '<p class="text-sm text-gray-500 italic col-span-full">No images uploaded yet</p>';
+            return;
+        }
+        
+        gallery.innerHTML = images.map(url => `
+            <div class="relative group cursor-pointer" onclick="selectImage('${url}')">
+                <img src="${url}" alt="Uploaded image" 
+                     class="w-full h-24 object-cover rounded-xl border-2 border-pink-200 hover:border-pink-400 transition-all"
+                     onerror="this.style.display='none'">
+                <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 rounded-xl transition-all flex items-center justify-center">
+                    <span class="text-white opacity-0 group-hover:opacity-100 text-xs font-semibold">Click to copy</span>
+                </div>
+            </div>
+        `).join('');
+    } catch (err) {
+        console.error('Failed to load image gallery:', err);
+    }
+}
+
+function selectImage(url) {
+    navigator.clipboard.writeText(url).then(() => {
+        // Update any image input fields on the page to show the URL
+        const addPlayerImageInput = document.querySelector('#addPlayerForm input[name="image"]');
+        if (addPlayerImageInput) {
+            addPlayerImageInput.value = url;
+        }
+        alert('Image URL copied: ' + url);
+    }).catch(err => {
+        console.error('Failed to copy:', err);
+    });
+}
+
+// Load image gallery on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadImageGallery();
+});
+
 async function addPlayer(event) {
     event.preventDefault();
     const form = event.target;
@@ -506,10 +756,94 @@ async function deletePlayer(id, name) {
     }
 }
 
+// Team management functions
+function openEditTeamModal(id, name, owner, mascot) {
+    document.getElementById('editTeamId').value = id;
+    document.getElementById('editTeamName').value = name;
+    document.getElementById('editTeamOwner').value = owner;
+    document.getElementById('editTeamMascot').value = mascot;
+    document.getElementById('editTeamModal').classList.remove('hidden');
+}
+
+function closeEditTeamModal() {
+    document.getElementById('editTeamModal').classList.add('hidden');
+}
+
+async function submitEditTeamForm(event) {
+    event.preventDefault();
+    
+    const data = {
+        id: document.getElementById('editTeamId').value,
+        name: document.getElementById('editTeamName').value,
+        owner: document.getElementById('editTeamOwner').value,
+        mascot: document.getElementById('editTeamMascot').value
+    };
+    
+    try {
+        const response = await fetch('/api/teams/update', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+        
+        if (response.ok) {
+            closeEditTeamModal();
+            // Reload to show updated team
+            setTimeout(() => window.location.reload(), 500);
+        } else {
+            const error = await response.text();
+            alert('Error updating team: ' + error);
+        }
+    } catch (err) {
+        alert('Error updating team: ' + err.message);
+    }
+}
+
+async function deleteTeam(id, name) {
+    if (!confirm(`Are you sure you want to delete team "${name}"? This cannot be undone.`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/teams/delete', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ id: id })
+        });
+        
+        if (response.ok) {
+            // Remove the team card from UI
+            const teamCard = document.querySelector(`[data-team-id="${id}"]`);
+            if (teamCard) {
+                teamCard.style.transition = 'all 0.3s ease-out';
+                teamCard.style.opacity = '0';
+                teamCard.style.transform = 'scale(0.8)';
+                setTimeout(() => teamCard.remove(), 300);
+            }
+        } else {
+            const error = await response.text();
+            alert('Error deleting team: ' + error);
+        }
+    } catch (err) {
+        alert('Error deleting team: ' + err.message);
+    }
+}
+
 // Close modal when clicking outside
 document.getElementById('editModal').addEventListener('click', function(e) {
     if (e.target === this) {
         closeEditModal();
+    }
+});
+
+// Close team modal when clicking outside
+document.getElementById('editTeamModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeEditTeamModal();
     }
 });
 </script>

@@ -3,8 +3,11 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -203,6 +206,100 @@ func (h *APIHandlers) ReorderTeams(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(teams)
+}
+
+// UpdateTeam updates an existing team
+func (h *APIHandlers) UpdateTeam(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodPut {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		ID     string `json:"id"`
+		Name   string `json:"name"`
+		Owner  string `json:"owner"`
+		Mascot string `json:"mascot"`
+		Color  string `json:"color"`
+	}
+
+	// Check content type - handle both JSON and form data
+	contentType := r.Header.Get("Content-Type")
+	if strings.Contains(contentType, "application/json") {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	} else {
+		// Handle form data
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		req.ID = r.FormValue("id")
+		req.Name = r.FormValue("name")
+		req.Owner = r.FormValue("owner")
+		req.Mascot = r.FormValue("mascot")
+		req.Color = r.FormValue("color")
+	}
+
+	if req.ID == "" {
+		http.Error(w, "Team ID is required", http.StatusBadRequest)
+		return
+	}
+
+	team, err := h.dal.UpdateTeam(req.ID, req.Name, req.Owner, req.Mascot, req.Color)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	h.pubsub.Publish(pubsub.Event{
+		Type: "teams:update",
+		Payload: map[string]interface{}{
+			"id": team.ID,
+		},
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(team)
+}
+
+// DeleteTeam deletes a team
+func (h *APIHandlers) DeleteTeam(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodDelete {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		ID string `json:"id"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if req.ID == "" {
+		http.Error(w, "Team ID is required", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.dal.DeleteTeam(req.ID); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	h.pubsub.Publish(pubsub.Event{
+		Type: "teams:delete",
+		Payload: map[string]interface{}{
+			"id": req.ID,
+		},
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]bool{"ok": true})
 }
 
 // AddPlayer adds a new player
@@ -520,4 +617,121 @@ func (h *APIHandlers) EventsSSE(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+}
+
+// UploadImage handles image file uploads for Jellycat pictures
+func (h *APIHandlers) UploadImage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Parse multipart form with max 10MB file size
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		logger.Error("Failed to parse multipart form", "error", err)
+		http.Error(w, "Failed to parse form: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Get the uploaded file
+	file, header, err := r.FormFile("image")
+	if err != nil {
+		logger.Error("Failed to get file from form", "error", err)
+		http.Error(w, "Failed to get file: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	// Validate file extension
+	ext := strings.ToLower(filepath.Ext(header.Filename))
+	allowedExts := map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".gif": true, ".webp": true}
+	if !allowedExts[ext] {
+		http.Error(w, "Invalid file type. Allowed: jpg, jpeg, png, gif, webp", http.StatusBadRequest)
+		return
+	}
+
+	// Create images directory if it doesn't exist
+	imagesDir := "static/images"
+	if err := os.MkdirAll(imagesDir, 0755); err != nil {
+		logger.Error("Failed to create images directory", "error", err)
+		http.Error(w, "Failed to create directory", http.StatusInternalServerError)
+		return
+	}
+
+	// Generate a safe filename (use original name but sanitize it)
+	safeFilename := sanitizeFilename(header.Filename)
+	destPath := filepath.Join(imagesDir, safeFilename)
+
+	// Create destination file
+	destFile, err := os.Create(destPath)
+	if err != nil {
+		logger.Error("Failed to create destination file", "error", err)
+		http.Error(w, "Failed to save file", http.StatusInternalServerError)
+		return
+	}
+	defer destFile.Close()
+
+	// Copy file contents
+	if _, err := io.Copy(destFile, file); err != nil {
+		logger.Error("Failed to copy file contents", "error", err)
+		http.Error(w, "Failed to save file", http.StatusInternalServerError)
+		return
+	}
+
+	logger.Info("Image uploaded successfully", "filename", safeFilename, "size", header.Size)
+
+	// Return the URL path to the uploaded image
+	imageURL := "/static/images/" + safeFilename
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"url":      imageURL,
+		"filename": safeFilename,
+	})
+}
+
+// ListImages returns a list of all images in the static/images directory
+func (h *APIHandlers) ListImages(w http.ResponseWriter, r *http.Request) {
+	imagesDir := "static/images"
+
+	entries, err := os.ReadDir(imagesDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// Return empty list if directory doesn't exist
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode([]string{})
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	var images []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		ext := strings.ToLower(filepath.Ext(entry.Name()))
+		if ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".gif" || ext == ".webp" {
+			images = append(images, "/static/images/"+entry.Name())
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(images)
+}
+
+// sanitizeFilename removes or replaces characters that could be problematic in filenames
+func sanitizeFilename(filename string) string {
+	// Replace spaces with hyphens
+	filename = strings.ReplaceAll(filename, " ", "-")
+
+	// Keep only alphanumeric, hyphens, underscores, and dots
+	var result strings.Builder
+	for _, r := range filename {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.' {
+			result.WriteRune(r)
+		}
+	}
+
+	return result.String()
 }

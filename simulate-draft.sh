@@ -14,11 +14,12 @@ echo "- Late picks (13-18) lose cuddle points (-5 to -10)"
 echo ""
 
 # Check if the application is running
-if ! curl -s http://localhost:3000/api/state > /dev/null 2>&1; then
+if ! curl -s http://localhost:3000/api/draft/state > /dev/null 2>&1; then
     echo "❌ Error: Jellycat draft application is not running on http://localhost:3000"
     echo ""
     echo "Please start the application first:"
     echo "  DB_DRIVER=sqlite SQLITE_FILE=dev.sqlite ./jellycat-draft"
+    echo "  Or use: make run-sqlite"
     echo ""
     exit 1
 fi
@@ -28,13 +29,13 @@ echo ""
 
 # Reset the draft to start fresh
 echo "🔄 Resetting draft..."
-curl -s -X POST http://localhost:3000/api/reset > /dev/null
+curl -s -X POST http://localhost:3000/api/draft/reset > /dev/null
 echo "✅ Draft reset complete"
 echo ""
 
 # Get the initial state to see teams and players
 echo "📋 Fetching teams and players..."
-STATE=$(curl -s http://localhost:3000/api/state)
+STATE=$(curl -s http://localhost:3000/api/draft/state)
 TEAMS=$(echo "$STATE" | jq -r '.teams[].id' | head -6)
 PLAYERS=$(echo "$STATE" | jq -r '.players[].id' | head -18)
 
@@ -58,7 +59,7 @@ for PLAYER_ID in "${PLAYER_ARRAY[@]}"; do
     TEAM_ID="${TEAM_ARRAY[$TEAM_INDEX]}"
     
     # Get player info before draft
-    BEFORE=$(curl -s http://localhost:3000/api/state | jq -r ".players[] | select(.id == \"$PLAYER_ID\")")
+    BEFORE=$(curl -s http://localhost:3000/api/draft/state | jq -r ".players[] | select(.id == \"$PLAYER_ID\")")
     PLAYER_NAME=$(echo "$BEFORE" | jq -r '.name')
     CUDDLE_BEFORE=$(echo "$BEFORE" | jq -r '.cuddlePoints')
     
@@ -68,7 +69,7 @@ for PLAYER_ID in "${PLAYER_ARRAY[@]}"; do
         -d "{\"playerId\":\"$PLAYER_ID\",\"teamId\":\"$TEAM_ID\"}")
     
     # Get player info after draft
-    AFTER=$(curl -s http://localhost:3000/api/state | jq -r ".players[] | select(.id == \"$PLAYER_ID\")")
+    AFTER=$(curl -s http://localhost:3000/api/draft/state | jq -r ".players[] | select(.id == \"$PLAYER_ID\")")
     CUDDLE_AFTER=$(echo "$AFTER" | jq -r '.cuddlePoints')
     TEAM_NAME=$(echo "$AFTER" | jq -r '.draftedBy')
     

@@ -16,6 +16,7 @@ import (
 	grpcserver "github.com/Billy-Davies-2/jellycat-draft-ui/internal/grpc"
 	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/handlers"
 	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/logger"
+	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/models"
 	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/pubsub"
 	pb "github.com/Billy-Davies-2/jellycat-draft-ui/proto"
 	"google.golang.org/grpc"
@@ -255,6 +256,7 @@ func main() {
 	mux.HandleFunc("/", homeHandler)
 	mux.HandleFunc("/start", authProvider.Middleware(startHandler))
 	mux.HandleFunc("/draft", authProvider.Middleware(draftHandler))
+	mux.HandleFunc("/results", authProvider.Middleware(resultsHandler))
 	mux.HandleFunc("/admin", authProvider.Middleware(adminHandler))
 
 	// API routes
@@ -268,6 +270,8 @@ func main() {
 	// Teams API
 	mux.HandleFunc("/api/teams", api.ListTeams)
 	mux.HandleFunc("/api/teams/add", api.AddTeam)
+	mux.HandleFunc("/api/teams/update", api.UpdateTeam)
+	mux.HandleFunc("/api/teams/delete", api.DeleteTeam)
 	mux.HandleFunc("/api/teams/reorder", api.ReorderTeams)
 
 	// Players API
@@ -276,6 +280,10 @@ func main() {
 	mux.HandleFunc("/api/players/delete", api.DeletePlayer)
 	mux.HandleFunc("/api/players/points", api.SetPlayerPoints)
 	mux.HandleFunc("/api/players/profile", api.GetPlayerProfile)
+
+	// Image upload API
+	mux.HandleFunc("/api/images/upload", api.UploadImage)
+	mux.HandleFunc("/api/images/list", api.ListImages)
 
 	// Chat API
 	mux.HandleFunc("/api/chat/list", api.ListChat)
@@ -414,6 +422,66 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tmpl, err := template.ParseFiles("templates/base.html", "templates/admin.html")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err := tmpl.ExecuteTemplate(w, "base.html", data); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func resultsHandler(w http.ResponseWriter, r *http.Request) {
+	state, err := dataStore.GetState()
+	if err != nil {
+		http.Error(w, "Failed to load state", http.StatusInternalServerError)
+		return
+	}
+
+	user := auth.GetUser(r)
+
+	// Calculate total points for each team and sort by points
+	type TeamWithPoints struct {
+		models.Team
+		TotalPoints int
+	}
+
+	teamsWithPoints := make([]TeamWithPoints, 0, len(state.Teams))
+	for _, team := range state.Teams {
+		totalPoints := 0
+		for _, player := range team.Players {
+			totalPoints += player.Points
+		}
+		teamsWithPoints = append(teamsWithPoints, TeamWithPoints{
+			Team:        team,
+			TotalPoints: totalPoints,
+		})
+	}
+
+	// Sort by total points descending
+	for i := 0; i < len(teamsWithPoints)-1; i++ {
+		for j := i + 1; j < len(teamsWithPoints); j++ {
+			if teamsWithPoints[j].TotalPoints > teamsWithPoints[i].TotalPoints {
+				teamsWithPoints[i], teamsWithPoints[j] = teamsWithPoints[j], teamsWithPoints[i]
+			}
+		}
+	}
+
+	// Get winner (team with most points)
+	var winner *TeamWithPoints
+	if len(teamsWithPoints) > 0 && teamsWithPoints[0].TotalPoints > 0 {
+		winner = &teamsWithPoints[0]
+	}
+
+	data := map[string]interface{}{
+		"Teams":   teamsWithPoints,
+		"Winner":  winner,
+		"User":    user,
+		"IsAdmin": auth.IsAdmin(user),
+	}
+
+	tmpl, err := template.ParseFiles("templates/base.html", "templates/results.html")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

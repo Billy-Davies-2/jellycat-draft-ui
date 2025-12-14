@@ -363,22 +363,50 @@ func (m *MockAuth) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/start", http.StatusSeeOther)
 }
 
-// Middleware for mock auth
+// Middleware for mock auth - auto-creates session for dev convenience
 func (m *MockAuth) Middleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie("session_id")
-		if err != nil {
-			http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
-			return
+
+		// Check if we have a valid session
+		var session *Session
+		var exists bool
+
+		if err == nil {
+			m.sessionMu.RLock()
+			session, exists = m.sessions[cookie.Value]
+			m.sessionMu.RUnlock()
 		}
 
-		m.sessionMu.RLock()
-		session, exists := m.sessions[cookie.Value]
-		m.sessionMu.RUnlock()
+		// If no valid session, auto-create one for dev convenience
+		if !exists || session == nil || time.Now().After(session.ExpiresAt) {
+			// Auto-authenticate as test user
+			sessionID := generateSessionID()
+			session = &Session{
+				ID: sessionID,
+				User: &User{
+					ID:       "dev-user-123",
+					Email:    "billy@jellycat.local",
+					Name:     "Billy",
+					Username: "Billy",
+					Groups:   []string{"users", "admins"},
+				},
+				CreatedAt: time.Now(),
+				ExpiresAt: time.Now().Add(24 * time.Hour),
+			}
 
-		if !exists || time.Now().After(session.ExpiresAt) {
-			http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
-			return
+			m.sessionMu.Lock()
+			m.sessions[sessionID] = session
+			m.sessionMu.Unlock()
+
+			// Set session cookie
+			http.SetCookie(w, &http.Cookie{
+				Name:     "session_id",
+				Value:    sessionID,
+				Path:     "/",
+				HttpOnly: true,
+				Expires:  session.ExpiresAt,
+			})
 		}
 
 		ctx := context.WithValue(r.Context(), "user", session.User)
