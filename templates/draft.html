@@ -367,15 +367,15 @@ function draftApp() {
         init() {
             // Listen for SSE events and update UI dynamically
             const eventSource = new EventSource('/api/events');
-            const isUserTurn = {{ .IsUserTurn }};
-            const currentTeamName = "{{ .CurrentTeamName }}";
-            const currentPick = {{ .CurrentPick }};
+            const initialIsUserTurn = {{ .IsUserTurn }};
+            const initialTeamName = "{{ .CurrentTeamName }}";
+            const initialPick = {{ .CurrentPick }};
             
             eventSource.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
                     if (data.type === 'draft:pick') {
-                        // Remove the drafted player from the UI
+                        // Remove the drafted player from the UI immediately
                         const playerId = data.payload?.playerId;
                         if (playerId) {
                             const playerCard = document.querySelector(`[data-player-id="${playerId}"]`);
@@ -394,6 +394,9 @@ function draftApp() {
                                 }, 300);
                             }
                         }
+                        
+                        // Fetch the full updated state to refresh team rosters and pick counter
+                        this.refreshDraftState();
                         this.showNotification('Player drafted! 🎉', 'success');
                     } else if (data.type === 'chat:add') {
                         // Fetch and append the latest chat message
@@ -409,16 +412,97 @@ function draftApp() {
                 }
             };
             
+            // Initialize available player count
+            this.updateAvailableCount();
+            
             // Show turn notification on page load (in development mode)
-            if (currentTeamName) {
+            if (initialTeamName) {
                 setTimeout(() => {
-                    if (isUserTurn) {
-                        this.showNotification("🏈 It's YOUR turn to pick! Pick " + currentPick, 'success');
+                    if (initialIsUserTurn) {
+                        this.showNotification("🏈 It's YOUR turn to pick! Pick " + initialPick, 'success');
                     } else {
-                        this.showNotification("🏈 Current turn: " + currentTeamName + " (Pick " + currentPick + ")", 'info');
+                        this.showNotification("🏈 Current turn: " + initialTeamName + " (Pick " + initialPick + ")", 'info');
                     }
                 }, 500);
             }
+        },
+        
+        async refreshDraftState() {
+            try {
+                const response = await fetch('/api/draft/state');
+                if (!response.ok) return;
+                const state = await response.json();
+                
+                // Update pick counter
+                this.updatePickCounter(state);
+                
+                // Update team rosters
+                this.updateTeamRosters(state.teams);
+            } catch (e) {
+                console.error('Failed to refresh draft state:', e);
+            }
+        },
+        
+        updatePickCounter(state) {
+            const counter = document.getElementById('pick-counter');
+            if (!counter) return;
+            
+            if (state.currentTeamName) {
+                counter.innerHTML = `Pick ${state.currentPick}: ${this.escapeHtml(state.currentTeamName)}'s turn 🏈`;
+            } else {
+                counter.innerHTML = 'Draft Complete! 🎉';
+            }
+        },
+        
+        updateTeamRosters(teams) {
+            const teamsContainer = document.getElementById('content-teams');
+            if (!teamsContainer || !teams) return;
+            
+            // Regenerate the entire teams grid for consistency
+            const teamsGrid = teamsContainer.querySelector('.grid');
+            if (!teamsGrid) return;
+            
+            teamsGrid.innerHTML = teams.map(team => this.createTeamCard(team)).join('');
+        },
+        
+        createTeamCard(team) {
+            const playersHtml = team.players && team.players.length > 0
+                ? `<div class="space-y-3">
+                    ${team.players.map(p => `
+                        <div class="flex items-center gap-3 p-3 bg-white rounded-xl border-2 border-pink-200 shadow-soft hover:shadow-soft-lg transition-all duration-200">
+                            <img src="${this.escapeHtml(p.image)}" alt="${this.escapeHtml(p.name)}" 
+                                 class="w-12 h-12 rounded-xl object-cover border-2 border-pink-200"
+                                 onerror="this.src='/static/images/placeholder.png'">
+                            <div class="flex-1">
+                                <div class="font-semibold text-sm font-display text-gray-800">${this.escapeHtml(p.name)}</div>
+                                <div class="text-xs text-gray-600">${this.escapeHtml(p.team)} • ${this.escapeHtml(p.position)}</div>
+                            </div>
+                            <div class="cuddle-badge">${p.points || p.cuddlePoints || 0}</div>
+                        </div>
+                    `).join('')}
+                   </div>`
+                : `<div class="text-center text-gray-500 py-10">
+                       <div class="text-4xl mb-3 animate-pulse-soft">💤</div>
+                       <div class="text-sm font-display">No Jellycats drafted yet</div>
+                       <div class="text-xs mt-1">⚽ Start your cuddly team! ⚽</div>
+                   </div>`;
+            
+            return `
+                <div class="card-jellycat ${this.escapeHtml(team.color)} shadow-soft-lg hover:scale-105 transition-all duration-300">
+                    <div class="${this.escapeHtml(team.color)} p-5 rounded-t-2xl bg-gradient-to-br from-white/50 to-transparent">
+                        <h3 class="font-display font-bold text-xl flex items-center gap-3">
+                            <span class="text-3xl animate-bounce-slow">${team.mascot}</span>
+                            <div>
+                                <div class="text-gray-800">${this.escapeHtml(team.name)}</div>
+                                <div class="text-sm font-normal text-gray-600 mt-1">Owner: ${this.escapeHtml(team.owner)}</div>
+                            </div>
+                        </h3>
+                    </div>
+                    <div class="p-5">
+                        ${playersHtml}
+                    </div>
+                </div>
+            `;
         },
         
         updateAvailableCount() {
