@@ -1,5 +1,5 @@
 {{ define "content" }}
-<div class="container mx-auto px-4 py-8 relative" x-data="adminApp()" x-init="init()">
+<div class="container mx-auto px-4 py-8 relative" x-data="adminApp">
     <!-- Decorative elements -->
     <div class="absolute top-10 right-10 text-5xl opacity-10 animate-float">⚽</div>
     <div class="absolute bottom-10 left-10 text-5xl opacity-10 animate-bounce-slow">🧸</div>
@@ -209,12 +209,19 @@
                     <!-- Edit/Delete buttons -->
                     <div class="flex gap-2 mt-3">
                         {{ if not .Drafted }}
-                        <button onclick="openEditModal('{{ .ID }}', '{{ .Name }}', '{{ .Position }}', '{{ .Tier }}', '{{ .Team }}', {{ .CuddlePoints }}, '{{ .Image }}')" 
-                                class="flex-1 px-3 py-2 rounded-xl text-sm font-semibold text-blue-700 bg-blue-100 hover:bg-blue-200 border-2 border-blue-300 transition-all duration-200">
+                        <button class="edit-player-btn flex-1 px-3 py-2 rounded-xl text-sm font-semibold text-blue-700 bg-blue-100 hover:bg-blue-200 border-2 border-blue-300 transition-all duration-200"
+                                data-id="{{ .ID }}"
+                                data-name="{{ .Name }}"
+                                data-position="{{ .Position }}"
+                                data-tier="{{ .Tier }}"
+                                data-team="{{ .Team }}"
+                                data-cuddle-points="{{ .CuddlePoints }}"
+                                data-image="{{ .Image }}">
                             ✏️ Edit
                         </button>
-                        <button onclick="deletePlayer('{{ .ID }}', '{{ .Name }}')" 
-                                class="flex-1 px-3 py-2 rounded-xl text-sm font-semibold text-red-700 bg-red-100 hover:bg-red-200 border-2 border-red-300 transition-all duration-200">
+                        <button class="delete-player-btn flex-1 px-3 py-2 rounded-xl text-sm font-semibold text-red-700 bg-red-100 hover:bg-red-200 border-2 border-red-300 transition-all duration-200"
+                                data-id="{{ .ID }}"
+                                data-name="{{ .Name }}">
                             🗑️ Delete
                         </button>
                         {{ else }}
@@ -395,9 +402,9 @@
 </div>
 
 <script>
-// Alpine.js admin app component
-function adminApp() {
-    return {
+// Register Alpine.js admin app component before Alpine initializes
+document.addEventListener('alpine:init', () => {
+    Alpine.data('adminApp', () => ({
         notification: null,
         
         init() {
@@ -557,8 +564,8 @@ function adminApp() {
                 this.notification = null;
             }, 3000);
         }
-    };
-}
+    }));
+});
 
 // Image upload functions
 async function uploadImage(event) {
@@ -643,9 +650,31 @@ function selectImage(url) {
     });
 }
 
-// Load image gallery on page load
+// Load image gallery on page load and set up event delegation
 document.addEventListener('DOMContentLoaded', function() {
     loadImageGallery();
+    
+    // Event delegation for edit player buttons
+    document.addEventListener('click', function(e) {
+        const editBtn = e.target.closest('.edit-player-btn');
+        if (editBtn) {
+            const id = editBtn.dataset.id;
+            const name = editBtn.dataset.name;
+            const position = editBtn.dataset.position;
+            const tier = editBtn.dataset.tier;
+            const team = editBtn.dataset.team;
+            const cuddlePoints = parseInt(editBtn.dataset.cuddlePoints) || 0;
+            const image = editBtn.dataset.image;
+            openEditModal(id, name, position, tier, team, cuddlePoints, image);
+        }
+        
+        const deleteBtn = e.target.closest('.delete-player-btn');
+        if (deleteBtn) {
+            const id = deleteBtn.dataset.id;
+            const name = deleteBtn.dataset.name;
+            deletePlayer(id, name);
+        }
+    });
 });
 
 async function addPlayer(event) {
