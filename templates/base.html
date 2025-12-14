@@ -101,15 +101,24 @@
             }
         });
 
-        // Connect to SSE for realtime updates
+        // Connect to SSE for realtime updates (only on pages without custom SSE handling)
         document.addEventListener('DOMContentLoaded', function() {
+            // Skip SSE setup if Alpine.js draftApp or adminApp is handling it
+            if (typeof draftApp === 'function' || typeof adminApp === 'function') {
+                return;
+            }
+            
             const eventSource = new EventSource('/api/events');
             
             eventSource.onmessage = function(event) {
-                const data = JSON.parse(event.data);
-                if (data.type && data.type !== 'connected') {
-                    // Trigger refresh of main content
-                    htmx.trigger(document.body, 'sse-event');
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type && data.type !== 'connected') {
+                        // Trigger refresh of main content
+                        htmx.trigger(document.body, 'sse-event');
+                    }
+                } catch (e) {
+                    // Ignore parse errors for keepalive messages
                 }
             };
             
