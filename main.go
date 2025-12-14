@@ -83,7 +83,7 @@ func main() {
 		log.Fatalf("Unknown DB_DRIVER: %s (valid: memory, sqlite, postgres)", dbDriver)
 	}
 
-	// Initialize pub/sub (NATS JetStream or Mock for local development)
+	// Initialize pub/sub (NATS JetStream or Embedded NATS for local development)
 	natsURL := os.Getenv("NATS_URL")
 	if natsURL == "" {
 		natsURL = "nats://localhost:4222"
@@ -100,15 +100,21 @@ func main() {
 		Unsubscribe(chan pubsub.Event)
 	}
 
-	// Use mock NATS in development mode, real NATS in production
+	// Use embedded NATS in development mode, real NATS in production
 	if environment == "" || environment == "development" {
-		logger.Info("Using mock NATS pub/sub for local development (no NATS server required)")
-		mockNats, err := pubsub.NewMockNATSPubSub(natsURL, natsSubject)
+		logger.Info("Starting embedded NATS server for local development")
+		embeddedNats, err := pubsub.NewEmbeddedNATSPubSub(pubsub.EmbeddedNATSOptions{
+			Port:       0, // Random available port
+			Subject:    natsSubject,
+			StreamName: "DRAFT_EVENTS",
+			StoreDir:   "", // In-memory storage
+		})
 		if err != nil {
-			logger.Error("Failed to initialize mock NATS", "error", err)
-			log.Fatalf("Failed to initialize mock NATS: %v", err)
+			logger.Error("Failed to initialize embedded NATS", "error", err)
+			log.Fatalf("Failed to initialize embedded NATS: %v", err)
 		}
-		natsPubSub = mockNats
+		natsPubSub = embeddedNats
+		logger.Info("Embedded NATS server ready", "url", embeddedNats.GetServerURL())
 	} else {
 		logger.Info("Using real NATS JetStream for production")
 		realNats, err := pubsub.NewNATSPubSub(natsURL, natsSubject)
@@ -567,22 +573,14 @@ func syncCuddlePoints() {
 }
 
 // convertPubSub wraps the NATS pubsub to provide a local *pubsub.PubSub for handlers/gRPC
-// This creates a local pubsub that receives events from NATS subscriptions
+// This creates a bidirectional bridge: publishes go to NATS, and NATS events come to local subscribers
 func convertPubSub(ps interface {
 	Publish(pubsub.Event)
 	Subscribe() chan pubsub.Event
 	Unsubscribe(chan pubsub.Event)
 }) *pubsub.PubSub {
-	// Create a local wrapper
-	wrapper := pubsub.New()
-
-	// Subscribe to the NATS pubsub and forward events to local wrapper
-	go func() {
-		ch := ps.Subscribe()
-		for event := range ch {
-			wrapper.Publish(event)
-		}
-	}()
+	// Create a wrapper that publishes to NATS and has local subscribers
+	wrapper := pubsub.NewWithUpstream(ps)
 
 	return wrapper
 }

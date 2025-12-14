@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/dal"
@@ -126,19 +127,40 @@ func (h *APIHandlers) AddTeam(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req struct {
-		Name   string `json:"name"`
-		Owner  string `json:"owner"`
-		Mascot string `json:"mascot"`
-		Color  string `json:"color"`
+	var name, owner, mascot, color string
+
+	// Check content type - handle both JSON and form data
+	contentType := r.Header.Get("Content-Type")
+	if strings.Contains(contentType, "application/json") {
+		var req struct {
+			Name   string `json:"name"`
+			Owner  string `json:"owner"`
+			Mascot string `json:"mascot"`
+			Color  string `json:"color"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		name, owner, mascot, color = req.Name, req.Owner, req.Mascot, req.Color
+	} else {
+		// Handle form data (from htmx forms)
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		name = r.FormValue("name")
+		owner = r.FormValue("owner")
+		mascot = r.FormValue("mascot")
+		color = r.FormValue("color")
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if name == "" {
+		http.Error(w, "Team name is required", http.StatusBadRequest)
 		return
 	}
 
-	team, err := h.dal.AddTeam(req.Name, req.Owner, req.Mascot, req.Color)
+	team, err := h.dal.AddTeam(name, owner, mascot, color)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -458,6 +480,8 @@ func (h *APIHandlers) AddReaction(w http.ResponseWriter, r *http.Request) {
 
 // EventsSSE provides Server-Sent Events for realtime updates
 func (h *APIHandlers) EventsSSE(w http.ResponseWriter, r *http.Request) {
+	logger.Info("SSE client connected", "remoteAddr", r.RemoteAddr)
+
 	// Set headers for SSE
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -465,8 +489,10 @@ func (h *APIHandlers) EventsSSE(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
 	// Subscribe to events
+	logger.Debug("SSE: Subscribing to pubsub")
 	eventChan := h.pubsub.Subscribe()
 	defer h.pubsub.Unsubscribe(eventChan)
+	logger.Debug("SSE: Subscribed successfully")
 
 	// Send initial connection message
 	fmt.Fprintf(w, "data: {\"type\":\"connected\"}\n\n")
