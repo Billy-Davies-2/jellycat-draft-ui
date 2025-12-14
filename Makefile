@@ -1,7 +1,34 @@
 .PHONY: all build test fuzz-test fuzz-http fuzz-grpc clean proto dev install-tailwind tailwind tailwind-watch
 
-# Default TailwindCSS binary name
+# TailwindCSS configuration
 TAILWIND_CLI := tailwindcss
+TAILWIND_VERSION := 4.1.18
+TAILWIND_INPUT := static/css/input.css
+TAILWIND_OUTPUT := static/css/styles.css
+
+# Detect OS and architecture for TailwindCSS download
+UNAME_S := $(shell uname -s)
+UNAME_M := $(shell uname -m)
+ifeq ($(UNAME_S),Linux)
+    ifeq ($(UNAME_M),x86_64)
+        TAILWIND_PLATFORM := linux-x64
+    else ifeq ($(UNAME_M),aarch64)
+        TAILWIND_PLATFORM := linux-arm64
+    else
+        TAILWIND_PLATFORM := linux-x64
+    endif
+else ifeq ($(UNAME_S),Darwin)
+    ifeq ($(UNAME_M),x86_64)
+        TAILWIND_PLATFORM := macos-x64
+    else ifeq ($(UNAME_M),arm64)
+        TAILWIND_PLATFORM := macos-arm64
+    else
+        TAILWIND_PLATFORM := macos-x64
+    endif
+else
+    # Default to Linux x64 for unknown platforms
+    TAILWIND_PLATFORM := linux-x64
+endif
 
 # Build the application
 all: build
@@ -66,11 +93,11 @@ fmt:
 lint:
 	go vet ./...
 
-# Install TailwindCSS CLI if not present
+# Install TailwindCSS CLI if not present (auto-detects platform)
 install-tailwind:
 	@if [ ! -f $(TAILWIND_CLI) ]; then \
-		echo "Downloading TailwindCSS CLI..."; \
-		curl -sL https://github.com/tailwindlabs/tailwindcss/releases/download/v4.1.18/tailwindcss-linux-x64 -o $(TAILWIND_CLI) && \
+		echo "Downloading TailwindCSS CLI v$(TAILWIND_VERSION) for $(TAILWIND_PLATFORM)..."; \
+		curl -sL https://github.com/tailwindlabs/tailwindcss/releases/download/v$(TAILWIND_VERSION)/tailwindcss-$(TAILWIND_PLATFORM) -o $(TAILWIND_CLI) && \
 		chmod +x $(TAILWIND_CLI); \
 		echo "TailwindCSS CLI installed."; \
 	else \
@@ -80,13 +107,13 @@ install-tailwind:
 # Compile TailwindCSS (requires install-tailwind first)
 tailwind: install-tailwind
 	@echo "Compiling TailwindCSS..."
-	./$(TAILWIND_CLI) -i static/css/input.css -o static/css/styles.css --minify
+	./$(TAILWIND_CLI) -i $(TAILWIND_INPUT) -o $(TAILWIND_OUTPUT) --minify
 	@echo "TailwindCSS compiled."
 
 # Watch TailwindCSS for changes during development
 tailwind-watch: install-tailwind
 	@echo "Starting TailwindCSS watch mode..."
-	./$(TAILWIND_CLI) -i static/css/input.css -o static/css/styles.css --watch
+	./$(TAILWIND_CLI) -i $(TAILWIND_INPUT) -o $(TAILWIND_OUTPUT) --watch
 
 # Full development setup: build CSS, build app, and run with memory storage
 dev: tailwind build
