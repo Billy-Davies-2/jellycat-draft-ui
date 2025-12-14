@@ -1,4 +1,7 @@
-.PHONY: all build test fuzz-test fuzz-http fuzz-grpc clean proto
+.PHONY: all build test fuzz-test fuzz-http fuzz-grpc clean proto dev install-tailwind tailwind tailwind-watch
+
+# Default TailwindCSS binary name
+TAILWIND_CLI := tailwindcss
 
 # Build the application
 all: build
@@ -62,3 +65,35 @@ fmt:
 # Run linter
 lint:
 	go vet ./...
+
+# Install TailwindCSS CLI if not present
+install-tailwind:
+	@if [ ! -f $(TAILWIND_CLI) ]; then \
+		echo "Downloading TailwindCSS CLI..."; \
+		curl -sL https://github.com/tailwindlabs/tailwindcss/releases/download/v4.1.18/tailwindcss-linux-x64 -o $(TAILWIND_CLI) && \
+		chmod +x $(TAILWIND_CLI); \
+		echo "TailwindCSS CLI installed."; \
+	else \
+		echo "TailwindCSS CLI already installed."; \
+	fi
+
+# Compile TailwindCSS (requires install-tailwind first)
+tailwind: install-tailwind
+	@echo "Compiling TailwindCSS..."
+	./$(TAILWIND_CLI) -i static/css/input.css -o static/css/styles.css --minify
+	@echo "TailwindCSS compiled."
+
+# Watch TailwindCSS for changes during development
+tailwind-watch: install-tailwind
+	@echo "Starting TailwindCSS watch mode..."
+	./$(TAILWIND_CLI) -i static/css/input.css -o static/css/styles.css --watch
+
+# Full development setup: build CSS, build app, and run with memory storage
+dev: tailwind build
+	@echo "Starting local development server..."
+	DB_DRIVER=memory ./jellycat-draft
+
+# Development with SQLite storage
+dev-sqlite: tailwind build
+	@echo "Starting local development server with SQLite..."
+	DB_DRIVER=sqlite SQLITE_FILE=dev.sqlite ./jellycat-draft

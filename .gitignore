@@ -29,6 +29,7 @@ next-env.d.ts
 jellycat-draft
 *.sqlite
 tailwindcss-linux-x64
+tailwindcss
 protoc-*.zip
 
 # Go binaries
