@@ -260,7 +260,7 @@ go test -fuzz=FuzzGRPCSendChatMessage -fuzztime=30s ./internal/fuzz
 
 ### Docker Deployment
 
-The application uses a **scratch-based** Docker image for minimal size and maximum security.
+The application uses a **distroless** Docker image for minimal size and maximum security with proper SSL/TLS support.
 
 #### Build and Run
 
@@ -277,18 +277,26 @@ docker run -p 3000:3000 -p 50051:50051 \
   -e SQLITE_FILE=/data/draft.sqlite \
   -v $(pwd)/data:/data \
   jellycat-draft
+
+# Run with PostgreSQL (production mode)
+docker run -p 3000:3000 -p 50051:50051 \
+  -e DB_DRIVER=postgres \
+  -e DATABASE_URL="postgres://user:pass@postgres-host:5432/jellycatdraft?sslmode=require&connect_timeout=60" \
+  -e ENVIRONMENT=production \
+  jellycat-draft
 ```
 
 #### Image Details
 
-- **Base**: `scratch` (empty image, ~0 MB overhead)
+- **Base**: `gcr.io/distroless/static-debian12:nonroot` (minimal image with CA certificates)
 - **Binary**: Statically linked (no runtime dependencies)
-- **Total Size**: ~20 MB (vs ~800 MB for Node.js)
-- **Security**: Minimal attack surface, no shell, no package manager
-- **Default Storage**: In-memory (for maximum portability with scratch)
+- **Total Size**: ~25 MB (vs ~800 MB for Node.js)
+- **Security**: Minimal attack surface, no shell, no package manager, runs as non-root
+- **SSL/TLS**: Full support for secure PostgreSQL connections (sslmode=require)
+- **Default Storage**: In-memory (for maximum portability)
 - **TailwindCSS**: Compiled during Docker build (styles.css included in image)
 
-**Note**: The scratch-based image has no writable filesystem. Use the memory driver or mount a volume for SQLite.
+**Note**: For PostgreSQL in production, ensure your `DATABASE_URL` includes `sslmode=require&connect_timeout=60` for CloudNativePG compatibility.
 
 ### Kubernetes Deployment
 

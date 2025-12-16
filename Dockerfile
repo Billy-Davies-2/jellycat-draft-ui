@@ -6,7 +6,7 @@ FROM golang:1.25-alpine AS builder
 WORKDIR /app
 
 # Update CA certificates and install build dependencies for static compilation
-RUN apk update && apk add --no-cache gcc musl-dev sqlite-dev curl
+RUN apk update && apk add --no-cache gcc musl-dev sqlite-dev curl ca-certificates
 
 # Download TailwindCSS standalone CLI
 RUN curl -sL https://github.com/tailwindlabs/tailwindcss/releases/download/v4.1.18/tailwindcss-linux-x64-musl -o tailwindcss && \
@@ -29,11 +29,10 @@ RUN CGO_ENABLED=1 GOOS=linux go build \
   -tags netgo,osusergo \
   -o jellycat-draft main.go
 
-FROM scratch
+# Use distroless for better SSL/TLS support in production
+# distroless/static-debian12 contains CA certificates and timezone data
+FROM gcr.io/distroless/static-debian12:nonroot
 WORKDIR /app
-
-# Copy CA certificates for HTTPS
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 # Copy binary and static files from builder
 COPY --from=builder /app/jellycat-draft .
@@ -41,8 +40,8 @@ COPY --from=builder /app/templates ./templates
 COPY --from=builder /app/static ./static
 
 # Environment variables
-# Note: Using memory driver by default since scratch has no writable filesystem
-# For SQLite, mount a volume at runtime
+# DB_DRIVER defaults to memory but should be set to postgres for production
+# Set ENVIRONMENT=production for production deployments
 ENV PORT=3000 \
   GRPC_PORT=50051 \
   DB_DRIVER=memory
@@ -50,4 +49,5 @@ ENV PORT=3000 \
 EXPOSE 3000 50051
 
 # Run the application
-CMD ["./jellycat-draft"]
+# Using ENTRYPOINT for better compatibility with distroless
+ENTRYPOINT ["./jellycat-draft"]
