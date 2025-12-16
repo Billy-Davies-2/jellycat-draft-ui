@@ -4,6 +4,44 @@ This document summarizes all the changes made to address the issues in the probl
 
 ## Issues Addressed
 
+### ✅ 5. PostgreSQL Production Deployment from Docker Container
+
+**Problem**: Production mode PostgreSQL deployment from Docker container did not work in Kubernetes with valid PostgreSQL connection strings.
+
+**Root Cause**: The `scratch` base image lacks proper SSL/TLS certificate infrastructure needed for secure PostgreSQL connections (sslmode=require) that CloudNativePG requires.
+
+**Solution Implemented**:
+- Changed Docker base image from `scratch` to `gcr.io/distroless/static-debian12:nonroot`
+- Distroless image includes:
+  - Proper CA certificate infrastructure for SSL/TLS connections
+  - Timezone data
+  - Non-root user for better security
+- Added `ca-certificates` package to builder stage
+- Updated documentation with PostgreSQL production deployment examples
+
+**Files Modified**:
+- `Dockerfile` - Changed base image and updated configuration
+- `README.md` - Updated Docker deployment documentation
+
+**Action Required**:
+1. Rebuild Docker image:
+   ```bash
+   docker build -t jellycat-draft:latest .
+   ```
+
+2. Push to registry and redeploy:
+   ```bash
+   docker push your-registry/jellycat-draft:latest
+   kubectl rollout restart deployment/jellycat-draft
+   ```
+
+3. Ensure DATABASE_URL includes SSL parameters:
+   ```
+   postgres://user:pass@host:5432/db?sslmode=require&connect_timeout=60
+   ```
+
+---
+
 ### ✅ 1. PostgreSQL Connection Timeout in Kubernetes
 
 **Problem**: Application failing to connect to CloudNativePG database with DNS timeout errors:
