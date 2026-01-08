@@ -7,7 +7,7 @@ require (
 	github.com/lib/pq v1.10.9
 	github.com/mattn/go-sqlite3 v1.14.32
 	github.com/nats-io/nats-server/v2 v2.12.2
-	github.com/nats-io/nats.go v1.47.0
+	github.com/nats-io/nats.go v1.48.0
 	golang.org/x/oauth2 v0.34.0
 	google.golang.org/grpc v1.77.0
 	google.golang.org/protobuf v1.36.11
