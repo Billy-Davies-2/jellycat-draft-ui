@@ -50,7 +50,7 @@ cd jellycat-draft-ui
 # Build the application
 make build
 # or
-go build -o jellycat-draft main.go
+go build -o jellycat-draft .
 
 # Run with mocks (default for local dev)
 ENVIRONMENT=development ./jellycat-draft

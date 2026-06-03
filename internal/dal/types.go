@@ -6,6 +6,7 @@ import "github.com/Billy-Davies-2/jellycat-draft-ui/internal/models"
 type DraftDAL interface {
 	GetState() (*models.DraftState, error)
 	Reset() error
+	SetDraftMode(mode models.DraftMode) (*models.DraftSettings, error)
 	AddPlayer(player *models.Player) (*models.Player, error)
 	UpdatePlayer(player *models.Player) (*models.Player, error)
 	DeletePlayer(id string) error

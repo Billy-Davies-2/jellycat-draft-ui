@@ -44,8 +44,12 @@ func TestMemoryDALDraftCuddlePointsAdjustment(t *testing.T) {
 
 	// Now draft all players in sequence
 	for i, playerID := range playerIDs {
-		teamIdx := i % len(state.Teams)
-		err = dal.DraftPlayer(playerID, state.Teams[teamIdx].ID)
+		state, err = dal.GetState()
+		if err != nil {
+			t.Fatalf("GetState() failed before pick %d: %v", i+1, err)
+		}
+
+		err = dal.DraftPlayer(playerID, state.CurrentTeamID)
 		if err != nil {
 			t.Fatalf("DraftPlayer() failed for player %d: %v", i+1, err)
 		}
@@ -173,8 +177,12 @@ func TestMemoryDALLatePicksLoseCuddlePoints(t *testing.T) {
 			t.Fatalf("Failed to add dummy player %d: %v", i, err)
 		}
 
-		teamIdx := i % len(state.Teams)
-		err = dal.DraftPlayer(p.ID, state.Teams[teamIdx].ID)
+		state, err = dal.GetState()
+		if err != nil {
+			t.Fatalf("GetState() failed before dummy player %d: %v", i, err)
+		}
+
+		err = dal.DraftPlayer(p.ID, state.CurrentTeamID)
 		if err != nil {
 			t.Fatalf("Failed to draft dummy player %d: %v", i, err)
 		}
@@ -196,8 +204,11 @@ func TestMemoryDALLatePicksLoseCuddlePoints(t *testing.T) {
 	}
 
 	// Draft as 18th overall pick
-	teamIdx := 17 % len(state.Teams)
-	err = dal.DraftPlayer(addedPlayer.ID, state.Teams[teamIdx].ID)
+	state, err = dal.GetState()
+	if err != nil {
+		t.Fatalf("GetState() failed before late pick: %v", err)
+	}
+	err = dal.DraftPlayer(addedPlayer.ID, state.CurrentTeamID)
 	if err != nil {
 		t.Fatalf("DraftPlayer() failed: %v", err)
 	}
@@ -217,6 +228,91 @@ func TestMemoryDALLatePicksLoseCuddlePoints(t *testing.T) {
 			}
 			break
 		}
+	}
+}
+
+func TestMemoryDALDraftModes(t *testing.T) {
+	tests := []struct {
+		name          string
+		mode          models.DraftMode
+		expectedTeams []string
+	}{
+		{
+			name:          "standard fantasy snake",
+			mode:          models.DraftModeStandard,
+			expectedTeams: []string{"Fluffy Foxes", "Cuddly Bears", "Snuggly Bunnies", "Cozy Cats", "Soft Sheep", "Gentle Giraffes", "Gentle Giraffes"},
+		},
+		{
+			name:          "reverse snake",
+			mode:          models.DraftModeReverseSnake,
+			expectedTeams: []string{"Gentle Giraffes", "Soft Sheep", "Cozy Cats", "Snuggly Bunnies", "Cuddly Bears", "Fluffy Foxes", "Fluffy Foxes"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dal := NewMemoryDAL()
+			if _, err := dal.SetDraftMode(tc.mode); err != nil {
+				t.Fatalf("SetDraftMode() failed: %v", err)
+			}
+
+			for pickIndex, expectedTeam := range tc.expectedTeams {
+				state, err := dal.GetState()
+				if err != nil {
+					t.Fatalf("GetState() failed before pick %d: %v", pickIndex+1, err)
+				}
+
+				if state.CurrentTeamName != expectedTeam {
+					t.Fatalf("pick %d expected %q, got %q", pickIndex+1, expectedTeam, state.CurrentTeamName)
+				}
+
+				if pickIndex == len(tc.expectedTeams)-1 {
+					break
+				}
+
+				player := &models.Player{
+					Name:         fmt.Sprintf("Mode Player %d", pickIndex),
+					Position:     "CC",
+					Team:         "Test",
+					Points:       100,
+					CuddlePoints: 50,
+					Tier:         models.TierA,
+				}
+				addedPlayer, err := dal.AddPlayer(player)
+				if err != nil {
+					t.Fatalf("AddPlayer() failed: %v", err)
+				}
+				if err := dal.DraftPlayer(addedPlayer.ID, state.CurrentTeamID); err != nil {
+					t.Fatalf("DraftPlayer() failed: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestMemoryDALRejectsWrongTurn(t *testing.T) {
+	dal := NewMemoryDAL()
+	state, err := dal.GetState()
+	if err != nil {
+		t.Fatalf("GetState() failed: %v", err)
+	}
+	if len(state.Teams) < 2 {
+		t.Fatal("Need at least two teams")
+	}
+
+	player := &models.Player{Name: "Turn Test", Position: "CC", Team: "Test", Points: 100, CuddlePoints: 50, Tier: models.TierA}
+	addedPlayer, err := dal.AddPlayer(player)
+	if err != nil {
+		t.Fatalf("AddPlayer() failed: %v", err)
+	}
+
+	wrongTeamID := state.Teams[1].ID
+	if wrongTeamID == state.CurrentTeamID {
+		wrongTeamID = state.Teams[0].ID
+	}
+
+	if err := dal.DraftPlayer(addedPlayer.ID, wrongTeamID); err == nil {
+		t.Fatal("DraftPlayer() should reject a pick by the wrong team")
 	}
 }
 

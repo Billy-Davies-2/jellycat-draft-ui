@@ -76,6 +76,11 @@ func (s *SQLiteDAL) initSchema() error {
 		text TEXT NOT NULL,
 		emotes TEXT NOT NULL
 	);
+
+	CREATE TABLE IF NOT EXISTS draft_settings (
+		key TEXT PRIMARY KEY,
+		value TEXT NOT NULL
+	);
 	`
 
 	if _, err := s.db.Exec(schema); err != nil {
@@ -131,7 +136,42 @@ func (s *SQLiteDAL) initSchema() error {
 		}
 	}
 
-	return nil
+	return s.ensureDefaultDraftSettings()
+}
+
+func (s *SQLiteDAL) ensureDefaultDraftSettings() error {
+	_, err := s.db.Exec(`
+		INSERT OR IGNORE INTO draft_settings (key, value)
+		VALUES ('mode', ?)
+	`, string(models.DefaultDraftSettings().Mode))
+
+	return err
+}
+
+func (s *SQLiteDAL) getDraftSettings() (models.DraftSettings, error) {
+	var mode string
+	err := s.db.QueryRow(`SELECT value FROM draft_settings WHERE key = 'mode'`).Scan(&mode)
+	if err == sql.ErrNoRows {
+		return models.DefaultDraftSettings(), s.ensureDefaultDraftSettings()
+	}
+	if err != nil {
+		return models.DraftSettings{}, err
+	}
+
+	return models.DraftSettingsForMode(models.DraftMode(mode)), nil
+}
+
+func (s *SQLiteDAL) getDraftModeTx(tx *sql.Tx) (models.DraftMode, error) {
+	var mode string
+	err := tx.QueryRow(`SELECT value FROM draft_settings WHERE key = 'mode'`).Scan(&mode)
+	if err == sql.ErrNoRows {
+		return models.DefaultDraftSettings().Mode, nil
+	}
+	if err != nil {
+		return "", err
+	}
+
+	return models.NormalizeDraftMode(models.DraftMode(mode)), nil
 }
 
 func (s *SQLiteDAL) seedData() error {
@@ -167,15 +207,26 @@ func (s *SQLiteDAL) seedData() error {
 	s.AddChatMessage("Tip: Click a Jellycat card to draft it!", "system")
 	s.AddChatMessage("Who will snag Bashful Bunny first? 🐰", "system")
 
+	if err := s.ensureDefaultDraftSettings(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
 func (s *SQLiteDAL) GetState() (*models.DraftState, error) {
 	state := &models.DraftState{
-		Players: []models.Player{},
-		Teams:   []models.Team{},
-		Chat:    []models.ChatMessage{},
+		Players:  []models.Player{},
+		Teams:    []models.Team{},
+		Chat:     []models.ChatMessage{},
+		Settings: models.DefaultDraftSettings(),
 	}
+
+	settings, err := s.getDraftSettings()
+	if err != nil {
+		return nil, err
+	}
+	state.Settings = settings
 
 	// Get players
 	rows, err := s.db.Query(`
@@ -205,7 +256,7 @@ func (s *SQLiteDAL) GetState() (*models.DraftState, error) {
 	// Get teams with their players
 	teamRows, err := s.db.Query(`
 		SELECT id, name, owner, mascot, color
-		FROM teams
+		FROM teams ORDER BY rowid
 	`)
 	if err != nil {
 		return nil, err
@@ -222,7 +273,7 @@ func (s *SQLiteDAL) GetState() (*models.DraftState, error) {
 
 		// Get team players
 		playerRows, err := s.db.Query(`
-			SELECT player_data FROM team_players WHERE team_id = ?
+			SELECT player_data FROM team_players WHERE team_id = ? ORDER BY draft_pick_number
 		`, t.ID)
 		if err != nil {
 			return nil, err
@@ -284,6 +335,10 @@ func (s *SQLiteDAL) Reset() error {
 	if err != nil {
 		return err
 	}
+	_, err = s.db.Exec("DELETE FROM draft_settings")
+	if err != nil {
+		return err
+	}
 	_, err = s.db.Exec("DELETE FROM teams")
 	if err != nil {
 		return err
@@ -297,6 +352,25 @@ func (s *SQLiteDAL) Reset() error {
 
 	// Re-seed
 	return s.seedData()
+}
+
+func (s *SQLiteDAL) SetDraftMode(mode models.DraftMode) (*models.DraftSettings, error) {
+	settings := models.DraftSettingsForMode(mode)
+
+	_, err := s.db.Exec(`
+		INSERT INTO draft_settings (key, value)
+		VALUES ('mode', ?)
+		ON CONFLICT(key) DO UPDATE SET value = excluded.value
+	`, string(settings.Mode))
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := s.AddChatMessage(fmt.Sprintf("Draft mode set to %s", settings.Name), "system"); err != nil {
+		return nil, err
+	}
+
+	return &settings, nil
 }
 
 func (s *SQLiteDAL) AddPlayer(player *models.Player) (*models.Player, error) {
@@ -502,6 +576,22 @@ func (s *SQLiteDAL) DraftPlayer(playerID, teamID string) error {
 		return err
 	}
 
+	mode, err := s.getDraftModeTx(tx)
+	if err != nil {
+		return err
+	}
+	teams, err := sqliteTeamsForTurn(tx)
+	if err != nil {
+		return err
+	}
+	players, err := sqlitePlayersForTurn(tx)
+	if err != nil {
+		return err
+	}
+	if err := validateTeamTurn(teams, mode, players, teamID); err != nil {
+		return err
+	}
+
 	// Calculate cuddle points adjustment based on draft position
 	// Early picks (1-6) gain points, late picks (13-18) lose points
 	cuddlePointsAdjustment := 0
@@ -560,6 +650,50 @@ func (s *SQLiteDAL) DraftPlayer(playerID, teamID string) error {
 	}
 
 	return tx.Commit()
+}
+
+func sqliteTeamsForTurn(tx *sql.Tx) ([]models.Team, error) {
+	rows, err := tx.Query(`SELECT id, name, owner, mascot, color FROM teams ORDER BY rowid`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	teams := []models.Team{}
+	for rows.Next() {
+		var team models.Team
+		if err := rows.Scan(&team.ID, &team.Name, &team.Owner, &team.Mascot, &team.Color); err != nil {
+			return nil, err
+		}
+		team.Players = []models.Player{}
+		teams = append(teams, team)
+	}
+
+	return teams, rows.Err()
+}
+
+func sqlitePlayersForTurn(tx *sql.Tx) ([]models.Player, error) {
+	rows, err := tx.Query(`
+		SELECT id, name, position, team, points, cuddle_points, tier, drafted, COALESCE(drafted_by, ''), image
+		FROM players
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	players := []models.Player{}
+	for rows.Next() {
+		var player models.Player
+		var drafted int
+		if err := rows.Scan(&player.ID, &player.Name, &player.Position, &player.Team, &player.Points, &player.CuddlePoints, &player.Tier, &drafted, &player.DraftedBy, &player.Image); err != nil {
+			return nil, err
+		}
+		player.Drafted = drafted == 1
+		players = append(players, player)
+	}
+
+	return players, rows.Err()
 }
 
 func (s *SQLiteDAL) AddChatMessage(text, msgType string) (*models.ChatMessage, error) {

@@ -18,26 +18,24 @@
         .dropdown-menu-visible { display: block !important; }
     </style>
 </head>
-<body class="min-h-screen" style="background: linear-gradient(135deg, #FFE5EC 0%, #E8D5F2 50%, #E0F2FE 100%); background-attachment: fixed;">
-    <!-- Decorative football elements -->
-    <div class="fixed top-10 right-10 text-6xl opacity-20 animate-float-slow pointer-events-none">🏈</div>
-    <div class="fixed bottom-20 left-20 text-5xl opacity-20 animate-bounce-slow pointer-events-none">🧸</div>
-    <div class="fixed top-1/3 left-10 text-4xl opacity-15 animate-float pointer-events-none">🏈</div>
+<body class="min-h-screen">
     <!-- User info bar (if authenticated) -->
     {{ if .User }}
-    <div class="bg-white/90 backdrop-blur-sm border-b-2 border-pink-200 px-4 py-3 flex justify-between items-center shadow-soft" x-data="{ showMenu: false }">
-        <div class="flex items-center space-x-4">
-            <span class="text-sm text-gray-700">Welcome, <strong class="text-gradient-jellycat font-display">{{ .User.Name }}</strong> <span class="text-xl">🧸</span></span>
+    <div class="broadcast-bar rounded-none border-x-0 border-t-0 px-4 py-3 flex justify-between items-center" x-data="{ showMenu: false }">
+        <div class="flex items-center flex-wrap gap-2">
+            <span class="text-sm text-white/80">Welcome, <strong class="font-display text-white">{{ .User.Name }}</strong></span>
+            <a href="/draft" class="draft-pill text-sm bg-white text-gray-900">Big Board</a>
+            <a href="/join" class="draft-pill text-sm bg-yellow-300 text-gray-900">Join Room</a>
             {{ if .IsAdmin }}
-            <a href="/admin" class="text-sm px-3 py-1.5 rounded-full bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 hover:from-purple-200 hover:to-pink-200 font-semibold transition-all duration-200">
-                ✨ Admin Panel
+            <a href="/admin" class="draft-pill text-sm bg-yellow-300 text-gray-900">
+                Admin Panel
             </a>
             {{ end }}
         </div>
         <div class="relative">
-            <button id="userMenuBtn" @click="showMenu = !showMenu" onclick="toggleUserMenu()" class="flex items-center space-x-2 text-sm px-4 py-2 rounded-full bg-white border-2 border-pink-200 hover:border-pink-300 text-gray-700 hover:shadow-soft transition-all duration-200">
+            <button id="userMenuBtn" @click="showMenu = !showMenu" onclick="toggleUserMenu()" class="flex items-center space-x-2 text-sm px-4 py-2 rounded-lg bg-white text-gray-900 border-2 border-white hover:shadow-soft transition-all duration-200">
                 <span class="font-semibold">{{ .User.Username }}</span>
-                {{ if .IsAdmin }}<span class="text-xs bg-purple-200 text-purple-800 px-2 py-1 rounded-full font-semibold">Admin</span>{{ end }}
+                {{ if .IsAdmin }}<span class="text-xs bg-yellow-300 text-gray-900 px-2 py-1 rounded-full font-black">Admin</span>{{ end }}
                 <svg id="userMenuArrow" class="w-4 h-4 transition-transform" :class="{ 'rotate-180': showMenu }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                 </svg>
@@ -51,11 +49,11 @@
                  x-transition:leave-start="opacity-100 scale-100"
                  x-transition:leave-end="opacity-0 scale-95"
                  @click.away="showMenu = false" 
-                 class="dropdown-menu-hidden absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-soft-lg py-2 z-50 border-2 border-pink-200">
+                 class="dropdown-menu-hidden absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-soft-lg py-2 z-50 border-2 border-gray-900">
                 {{ if .IsAdmin }}
-                <a href="/admin" class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gradient-to-r hover:from-pink-50 hover:to-purple-50 font-medium rounded-xl mx-2">✨ Admin Panel</a>
+                <a href="/admin" class="block px-4 py-2.5 text-sm text-gray-800 hover:bg-yellow-100 font-bold rounded-lg mx-2">Admin Panel</a>
                 {{ end }}
-                <a href="/auth/logout" class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gradient-to-r hover:from-pink-50 hover:to-purple-50 font-medium rounded-xl mx-2">👋 Logout</a>
+                <a href="/auth/logout" class="block px-4 py-2.5 text-sm text-gray-800 hover:bg-yellow-100 font-bold rounded-lg mx-2">Logout</a>
             </div>
         </div>
     </div>

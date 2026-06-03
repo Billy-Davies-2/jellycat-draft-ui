@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"time"
 
@@ -23,7 +24,6 @@ import (
 )
 
 var (
-	templates    *template.Template
 	dataStore    dal.DraftDAL
 	authProvider auth.AuthProvider
 	ps           interface {
@@ -44,11 +44,16 @@ func main() {
 	logger.Init()
 
 	logger.Info("Starting Jellycat Draft microservice")
+	environment := os.Getenv("ENVIRONMENT")
 
 	// Initialize database driver
 	dbDriver := os.Getenv("DB_DRIVER")
 	if dbDriver == "" {
-		dbDriver = "memory"
+		if environment == "production" {
+			dbDriver = "postgres"
+		} else {
+			dbDriver = "memory"
+		}
 	}
 
 	var err error
@@ -69,6 +74,9 @@ func main() {
 		logger.Info("Connected to SQLite database", "file", sqliteFile)
 	case "postgres":
 		dbConnString := os.Getenv("DATABASE_URL")
+		if dbConnString == "" {
+			dbConnString = buildPostgresURLFromEnv()
+		}
 		if dbConnString == "" {
 			logger.Error("DATABASE_URL environment variable is required for postgres driver")
 			log.Fatal("DATABASE_URL environment variable is required for postgres driver")
@@ -94,7 +102,6 @@ func main() {
 		natsSubject = "draft.events"
 	}
 
-	environment := os.Getenv("ENVIRONMENT")
 	var natsPubSub interface {
 		Publish(pubsub.Event)
 		Subscribe() chan pubsub.Event
@@ -128,14 +135,13 @@ func main() {
 	}
 
 	ps = natsPubSub
+	draftRoom = newRoomState(os.Getenv("ROOM_CODE"))
+	logger.Info("Draft room code ready", "code", draftRoom.Code())
 
-	// Initialize ClickHouse client (or mock in development)
+	// Initialize ClickHouse client only when analytics is explicitly enabled.
+	clickHouseEnabled := os.Getenv("CLICKHOUSE_ENABLED") == "true"
 	var chErr error
-	if environment == "" || environment == "development" {
-		logger.Info("Using mock ClickHouse for local development (no ClickHouse server required)")
-		// In development, we'll just skip ClickHouse and use static points
-		chClient = nil
-	} else {
+	if clickHouseEnabled {
 		chAddr := os.Getenv("CLICKHOUSE_ADDR")
 		if chAddr == "" {
 			chAddr = "localhost:9000"
@@ -156,6 +162,8 @@ func main() {
 			log.Fatalf("Failed to initialize ClickHouse: %v", chErr)
 		}
 		logger.Info("Connected to ClickHouse", "address", chAddr, "database", chDB)
+	} else {
+		logger.Info("Skipping ClickHouse analytics integration", "enabled", clickHouseEnabled)
 	}
 
 	// Start periodic cuddle points sync (only in production with ClickHouse)
@@ -206,11 +214,9 @@ func main() {
 	}
 
 	// Load templates
-	var tmplErr error
-	templates, tmplErr = template.ParseGlob("templates/*.html")
-	if tmplErr != nil {
-		logger.Error("Failed to parse templates", "error", tmplErr)
-		log.Fatalf("Failed to parse templates: %v", tmplErr)
+	if _, err := template.ParseGlob("templates/*.html"); err != nil {
+		logger.Error("Failed to parse templates", "error", err)
+		log.Fatalf("Failed to parse templates: %v", err)
 	}
 	logger.Info("Templates loaded successfully")
 
@@ -252,10 +258,12 @@ func main() {
 	mux.HandleFunc("/auth/callback", authProvider.CallbackHandler)
 	mux.HandleFunc("/auth/logout", authProvider.LogoutHandler)
 
-	// Page routes (protected)
+	// Page routes
 	mux.HandleFunc("/", homeHandler)
 	mux.HandleFunc("/start", authProvider.Middleware(startHandler))
 	mux.HandleFunc("/draft", authProvider.Middleware(draftHandler))
+	mux.HandleFunc("/join", pickHandler)
+	mux.HandleFunc("/pick", pickHandler)
 	mux.HandleFunc("/results", authProvider.Middleware(resultsHandler))
 	mux.HandleFunc("/admin", authProvider.Middleware(adminHandler))
 
@@ -266,10 +274,13 @@ func main() {
 	mux.HandleFunc("/api/draft/state", api.GetDraftState)
 	mux.HandleFunc("/api/draft/pick", api.DraftPick)
 	mux.HandleFunc("/api/draft/reset", api.ResetDraft)
+	mux.HandleFunc("/api/draft/settings", api.UpdateDraftSettings)
+	mux.HandleFunc("/api/room", roomInfoHandler)
+	mux.HandleFunc("/api/room/join", roomJoinHandler)
 
 	// Teams API
 	mux.HandleFunc("/api/teams", api.ListTeams)
-	mux.HandleFunc("/api/teams/add", api.AddTeam)
+	mux.HandleFunc("/api/teams/add", authProvider.Middleware(api.AddTeam))
 	mux.HandleFunc("/api/teams/update", api.UpdateTeam)
 	mux.HandleFunc("/api/teams/delete", api.DeleteTeam)
 	mux.HandleFunc("/api/teams/reorder", api.ReorderTeams)
@@ -312,6 +323,38 @@ func main() {
 	}
 }
 
+func buildPostgresURLFromEnv() string {
+	host := os.Getenv("POSTGRES_HOST")
+	user := os.Getenv("POSTGRES_USER")
+	password := os.Getenv("POSTGRES_PASSWORD")
+	database := os.Getenv("POSTGRES_DB")
+	if host == "" || user == "" || database == "" {
+		return ""
+	}
+
+	port := os.Getenv("POSTGRES_PORT")
+	if port == "" {
+		port = "5432"
+	}
+
+	sslMode := os.Getenv("POSTGRES_SSLMODE")
+	if sslMode == "" {
+		sslMode = "disable"
+	}
+
+	postgresURL := url.URL{
+		Scheme: "postgres",
+		User:   url.UserPassword(user, password),
+		Host:   net.JoinHostPort(host, port),
+		Path:   database,
+	}
+	query := postgresURL.Query()
+	query.Set("sslmode", sslMode)
+	postgresURL.RawQuery = query.Encode()
+
+	return postgresURL.String()
+}
+
 func homeHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
@@ -329,9 +372,14 @@ func startHandler(w http.ResponseWriter, r *http.Request) {
 
 	user := auth.GetUser(r)
 	data := map[string]interface{}{
-		"Teams":   state.Teams,
-		"User":    user,
-		"IsAdmin": auth.IsAdmin(user),
+		"Teams":       state.Teams,
+		"Settings":    state.Settings,
+		"ModeOptions": models.DraftModeOptions(),
+		"User":        user,
+		"IsAdmin":     auth.IsAdmin(user),
+	}
+	for key, value := range roomTemplateData(r) {
+		data[key] = value
 	}
 
 	// Parse both base and content templates
@@ -371,19 +419,91 @@ func draftHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := map[string]interface{}{
-		"Players":         state.Players,
-		"Teams":           state.Teams,
-		"Chat":            state.Chat,
-		"User":            user,
-		"IsAdmin":         auth.IsAdmin(user),
-		"CurrentPick":     state.CurrentPick,
-		"CurrentTeamID":   state.CurrentTeamID,
-		"CurrentTeamName": state.CurrentTeamName,
-		"UserTeamID":      userTeamID,
-		"IsUserTurn":      isUserTurn,
+		"Players":             state.Players,
+		"Teams":               state.Teams,
+		"Chat":                state.Chat,
+		"Settings":            state.Settings,
+		"ModeOptions":         models.DraftModeOptions(),
+		"IsBingoMode":         state.Settings.Mode == models.DraftModeBingo,
+		"IsWheelMode":         state.Settings.Mode == models.DraftModeWheel,
+		"DraftOrder":          state.DraftOrder,
+		"BingoBoard":          state.BingoBoard,
+		"CurrentBingoPrompt":  state.CurrentBingoPrompt,
+		"WheelSlots":          state.WheelSlots,
+		"SuggestedPick":       state.SuggestedPick,
+		"AnalyticsConfigured": chClient != nil,
+		"User":                user,
+		"IsAdmin":             auth.IsAdmin(user),
+		"CurrentPick":         state.CurrentPick,
+		"CurrentRound":        state.CurrentRound,
+		"PickInRound":         state.PickInRound,
+		"CurrentTeamID":       state.CurrentTeamID,
+		"CurrentTeamName":     state.CurrentTeamName,
+		"UserTeamID":          userTeamID,
+		"IsUserTurn":          isUserTurn,
+	}
+	for key, value := range roomTemplateData(r) {
+		data[key] = value
 	}
 
 	tmpl, err := template.ParseFiles("templates/base.html", "templates/draft.html")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err := tmpl.ExecuteTemplate(w, "base.html", data); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func pickHandler(w http.ResponseWriter, r *http.Request) {
+	state, err := dataStore.GetState()
+	if err != nil {
+		http.Error(w, "Failed to load state", http.StatusInternalServerError)
+		return
+	}
+
+	user := auth.GetUser(r)
+
+	var userTeamID string
+	var isUserTurn bool
+	if user != nil {
+		for _, team := range state.Teams {
+			if team.Owner == user.Username || team.Owner == user.Name {
+				userTeamID = team.ID
+				if team.ID == state.CurrentTeamID {
+					isUserTurn = true
+				}
+				break
+			}
+		}
+	}
+
+	data := map[string]interface{}{
+		"Players":             state.Players,
+		"Teams":               state.Teams,
+		"Settings":            state.Settings,
+		"IsBingoMode":         state.Settings.Mode == models.DraftModeBingo,
+		"IsWheelMode":         state.Settings.Mode == models.DraftModeWheel,
+		"CurrentBingoPrompt":  state.CurrentBingoPrompt,
+		"DraftOrder":          state.DraftOrder,
+		"WheelSlots":          state.WheelSlots,
+		"SuggestedPick":       state.SuggestedPick,
+		"AnalyticsConfigured": chClient != nil,
+		"User":                user,
+		"IsAdmin":             auth.IsAdmin(user),
+		"CurrentPick":         state.CurrentPick,
+		"CurrentRound":        state.CurrentRound,
+		"PickInRound":         state.PickInRound,
+		"CurrentTeamID":       state.CurrentTeamID,
+		"CurrentTeamName":     state.CurrentTeamName,
+		"UserTeamID":          userTeamID,
+		"IsUserTurn":          isUserTurn,
+		"InitialRoomCode":     normalizeRoomCode(r.URL.Query().Get("code")),
+	}
+
+	tmpl, err := template.ParseFiles("templates/base.html", "templates/pick.html")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -415,10 +535,13 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := map[string]interface{}{
-		"Players": state.Players,
-		"Teams":   state.Teams,
-		"User":    user,
-		"IsAdmin": true,
+		"Players":             state.Players,
+		"Teams":               state.Teams,
+		"Settings":            state.Settings,
+		"ModeOptions":         models.DraftModeOptions(),
+		"AnalyticsConfigured": chClient != nil,
+		"User":                user,
+		"IsAdmin":             true,
 	}
 
 	tmpl, err := template.ParseFiles("templates/base.html", "templates/admin.html")

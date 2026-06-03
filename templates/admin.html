@@ -1,9 +1,5 @@
 {{ define "content" }}
-<div class="container mx-auto px-4 py-8 relative" x-data="adminApp">
-    <!-- Decorative elements -->
-    <div class="absolute top-10 right-10 text-5xl opacity-10 animate-float">⚽</div>
-    <div class="absolute bottom-10 left-10 text-5xl opacity-10 animate-bounce-slow">🧸</div>
-    
+<div class="stadium-shell container mx-auto px-4 py-8 relative" x-data="adminApp">
     <!-- Notification component -->
     <div x-show="notification" x-transition
          class="fixed top-4 right-4 z-50 max-w-sm"
@@ -18,18 +14,19 @@
         </div>
     </div>
     
-    <div class="mb-10 relative z-10">
-        <h1 class="text-5xl font-display font-bold text-gradient-jellycat mb-3">
-            ✨ Admin Panel ✨
+    <div class="scoreboard-panel p-6 mb-8 relative z-10">
+        <div class="scoreboard-label">Commissioner Console</div>
+        <h1 class="text-5xl font-display font-black text-white mt-2">
+            Admin Panel
         </h1>
-        <p class="text-gray-700 text-lg font-display">Manage Jellycats and draft settings</p>
+        <p class="text-white/75 text-lg font-display mt-2">Manage prospects, teams, draft systems, and media.</p>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
         <!-- Add New Jellycat -->
         <div class="card-jellycat shadow-soft-lg">
-            <div class="bg-gradient-to-r from-pink-100 via-purple-100 to-blue-100 p-6 rounded-t-2xl">
-                <h2 class="font-display font-bold text-2xl text-gradient-jellycat">🧸 Add New Jellycat</h2>
+            <div class="p-6 border-b-2 border-gray-900 bg-[#f6d46b]">
+                <h2 class="font-display font-black text-2xl text-gray-900">Add New Jellycat</h2>
             </div>
             <div class="p-6">
                 <form id="addPlayerForm" onsubmit="addPlayer(event)">
@@ -86,11 +83,36 @@
 
         <!-- Draft Controls -->
         <div class="card-jellycat shadow-soft-lg">
-            <div class="bg-gradient-to-r from-purple-100 via-pink-100 to-purple-100 p-6 rounded-t-2xl">
-                <h2 class="font-display font-bold text-2xl text-gradient-jellycat">⚙️ Draft Controls</h2>
+            <div class="p-6 border-b-2 border-gray-900 bg-[#52c7bd]">
+                <h2 class="font-display font-black text-2xl text-gray-900">Draft Controls</h2>
             </div>
             <div class="p-6 space-y-5">
-                <div class="p-5 bg-gradient-to-br from-yellow-50 to-orange-50 border-2 border-yellow-300 rounded-2xl">
+                <div class="pick-order-row p-5 shadow-soft">
+                    <div class="mb-4">
+                        <div class="text-sm font-semibold uppercase text-purple-700">Active draft system</div>
+                        <div class="text-2xl font-display font-bold text-gray-800">{{ .Settings.Name }}</div>
+                        <div class="text-sm text-gray-600 mt-1">{{ .Settings.Description }}</div>
+                    </div>
+                    <form id="draftSettingsForm" onsubmit="updateDraftSettings(event)" class="space-y-3">
+                        <label class="block text-sm font-semibold text-gray-800 font-display">Draft System</label>
+                        <select name="mode" class="input-jellycat">
+                            {{ range .ModeOptions }}
+                            <option value="{{ .Mode }}" {{ if eq .Mode $.Settings.Mode }}selected{{ end }}>{{ .Name }} - {{ .Tagline }}</option>
+                            {{ end }}
+                        </select>
+                        <button type="submit" class="btn-jellycat w-full">Save Draft System</button>
+                    </form>
+                </div>
+
+                <div class="pick-order-row p-5 bg-[#dff2d9]">
+                    <div class="text-sm font-semibold uppercase text-green-700">Analytics bridge</div>
+                    <div class="mt-1 font-display font-bold text-gray-800">
+                        {{ if .AnalyticsConfigured }}ClickHouse is configured{{ else }}ClickHouse is optional and not configured{{ end }}
+                    </div>
+                    <p class="text-sm text-gray-600 mt-2">Social sentiment ingestion can be added once API keys and secret storage are ready.</p>
+                </div>
+
+                <div class="pick-order-row p-5 bg-[#fff1d1]">
                     <p class="text-sm text-yellow-900 font-display">
                         <strong class="text-lg">⚠️ Warning:</strong><br>
                         Resetting the draft will clear all picks and restore default teams and players.
@@ -101,12 +123,12 @@
                         hx-confirm="Are you sure you want to reset the draft? This cannot be undone."
                         hx-swap="none"
                         onclick="setTimeout(() => window.location.reload(), 500)"
-                        class="w-full px-6 py-4 rounded-3xl font-bold text-white bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 shadow-soft-lg hover:shadow-soft-xl transition-all duration-300 hover:scale-105">
-                    🔄 Reset Draft
+                        class="w-full px-6 py-4 rounded-lg border-2 border-gray-900 font-black text-white bg-red-600 shadow-soft-lg hover:shadow-soft-xl transition-all duration-300 hover:scale-105">
+                    Reset Draft
                 </button>
                 
-                <a href="/draft" class="block w-full text-center px-6 py-4 rounded-3xl font-bold text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-soft-lg hover:shadow-soft-xl transition-all duration-300 hover:scale-105">
-                    🧸 Go to Draft
+                <a href="/draft" class="btn-football w-full">
+                    Go to Draft
                 </a>
             </div>
         </div>
@@ -114,8 +136,8 @@
 
     <!-- Image Upload Section -->
     <div class="card-jellycat shadow-soft-lg mb-8">
-        <div class="bg-gradient-to-r from-green-100 via-teal-100 to-cyan-100 p-6 rounded-t-2xl">
-            <h2 class="font-display font-bold text-2xl text-gradient-jellycat">📷 Upload Jellycat Images</h2>
+        <div class="p-6 border-b-2 border-gray-900 bg-[#ff7f5c]">
+            <h2 class="font-display font-black text-2xl text-gray-900">Upload Jellycat Images</h2>
         </div>
         <div class="p-6">
             <form id="uploadImageForm" onsubmit="uploadImage(event)" enctype="multipart/form-data">
@@ -140,7 +162,7 @@
             </form>
             
             <div id="uploadResult" class="mt-4 hidden">
-                <div class="p-4 bg-green-50 border-2 border-green-200 rounded-2xl">
+                <div class="pick-order-row p-4 bg-[#dff2d9]">
                     <p class="text-sm text-green-700 font-display">
                         <strong>Uploaded!</strong> Use this URL in the Jellycat Image field:
                     </p>
@@ -163,16 +185,16 @@
 
     <!-- Current Players -->
     <div class="card-jellycat shadow-soft-lg">
-        <div class="bg-gradient-to-r from-pink-100 via-purple-100 to-blue-100 p-6 rounded-t-2xl">
-            <h2 class="font-display font-bold text-2xl text-gradient-jellycat">🌟 Current Jellycats</h2>
+        <div class="p-6 border-b-2 border-gray-900 bg-[#f6d46b]">
+            <h2 class="font-display font-black text-2xl text-gray-900">Current Jellycats</h2>
         </div>
         <div class="p-6">
             <div id="players-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                 {{ range .Players }}
-                <div class="border-2 border-pink-200 rounded-2xl p-5 {{ if .Drafted }}bg-gray-50 opacity-70{{ else }}bg-white hover:shadow-soft-lg{{ end }} transition-all duration-300" data-player-id="{{ .ID }}">
+                <div class="pick-order-row p-5 {{ if .Drafted }}bg-gray-50 opacity-70{{ else }}bg-white hover:shadow-soft-lg{{ end }} transition-all duration-300" data-player-id="{{ .ID }}">
                     <div class="flex items-center gap-3 mb-3">
                         <img src="{{ .Image }}" alt="{{ .Name }}" 
-                             class="w-20 h-20 rounded-2xl object-cover border-2 border-pink-200 shadow-soft"
+                             class="w-20 h-20 rounded-lg object-contain border-2 border-gray-900 bg-white shadow-soft"
                              onerror="this.src='/static/images/placeholder.png'">
                         <div class="flex-1">
                             <div class="font-bold text-sm font-display text-gray-800">{{ .Name }}</div>
@@ -238,13 +260,13 @@
 
     <!-- Manage Teams -->
     <div class="card-jellycat shadow-soft-lg mt-8">
-        <div class="bg-gradient-to-r from-purple-100 via-pink-100 to-orange-100 p-6 rounded-t-2xl">
-            <h2 class="font-display font-bold text-2xl text-gradient-jellycat">👥 Manage Teams</h2>
+        <div class="p-6 border-b-2 border-gray-900 bg-[#52c7bd]">
+            <h2 class="font-display font-black text-2xl text-gray-900">Manage Teams</h2>
         </div>
         <div class="p-6">
             <div id="teams-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                 {{ range .Teams }}
-                <div class="border-2 border-purple-200 rounded-2xl p-5 bg-white hover:shadow-soft-lg transition-all duration-300" data-team-id="{{ .ID }}">
+                <div class="pick-order-row p-5 bg-white hover:shadow-soft-lg transition-all duration-300" data-team-id="{{ .ID }}">
                     <div class="flex items-center gap-3 mb-3">
                         <span class="text-4xl">{{ .Mascot }}</span>
                         <div class="flex-1">
@@ -291,11 +313,11 @@
 </div>
 
 <!-- Edit Team Modal -->
-<div id="editTeamModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-3xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
-        <div class="bg-gradient-to-r from-purple-100 via-pink-100 to-orange-100 p-6 rounded-t-3xl">
+<div id="editTeamModal" class="admin-modal fixed inset-0 bg-black bg-opacity-50 hidden z-50 items-center justify-center p-4">
+    <div class="bg-white rounded-lg border-2 border-gray-900 shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+        <div class="p-6 border-b-2 border-gray-900 bg-[#52c7bd]">
             <div class="flex justify-between items-center">
-                <h2 class="font-display font-bold text-2xl text-gradient-jellycat">✏️ Edit Team</h2>
+                <h2 class="font-display font-black text-2xl text-gray-900">Edit Team</h2>
                 <button onclick="closeEditTeamModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
             </div>
         </div>
@@ -319,7 +341,7 @@
                     </div>
                     
                     <div class="flex gap-3">
-                        <button type="button" onclick="closeEditTeamModal()" class="flex-1 px-6 py-3 rounded-2xl font-bold text-gray-700 bg-gray-200 hover:bg-gray-300 transition-all duration-200">
+                        <button type="button" onclick="closeEditTeamModal()" class="flex-1 px-6 py-3 rounded-lg border-2 border-gray-900 font-bold text-gray-700 bg-gray-200 hover:bg-gray-300 transition-all duration-200">
                             Cancel
                         </button>
                         <button type="submit" class="flex-1 btn-jellycat">
@@ -333,11 +355,11 @@
 </div>
 
 <!-- Edit Jellycat Modal -->
-<div id="editModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-3xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
-        <div class="bg-gradient-to-r from-pink-100 via-purple-100 to-blue-100 p-6 rounded-t-3xl">
+<div id="editModal" class="admin-modal fixed inset-0 bg-black bg-opacity-50 hidden z-50 items-center justify-center p-4">
+    <div class="bg-white rounded-lg border-2 border-gray-900 shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+        <div class="p-6 border-b-2 border-gray-900 bg-[#f6d46b]">
             <div class="flex justify-between items-center">
-                <h2 class="font-display font-bold text-2xl text-gradient-jellycat">✏️ Edit Jellycat</h2>
+                <h2 class="font-display font-black text-2xl text-gray-900">Edit Jellycat</h2>
                 <button onclick="closeEditModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
             </div>
         </div>
@@ -388,7 +410,7 @@
                     </div>
                     
                     <div class="flex gap-3">
-                        <button type="button" onclick="closeEditModal()" class="flex-1 px-6 py-3 rounded-2xl font-bold text-gray-700 bg-gray-200 hover:bg-gray-300 transition-all duration-200">
+                        <button type="button" onclick="closeEditModal()" class="flex-1 px-6 py-3 rounded-lg border-2 border-gray-900 font-bold text-gray-700 bg-gray-200 hover:bg-gray-300 transition-all duration-200">
                             Cancel
                         </button>
                         <button type="submit" class="flex-1 btn-jellycat">
@@ -503,10 +525,10 @@ document.addEventListener('alpine:init', () => {
             const cuddlePoints = player.cuddlePoints || player.points || 0;
             
             return `
-                <div class="border-2 border-pink-200 rounded-2xl p-5 bg-white hover:shadow-soft-lg transition-all duration-300" data-player-id="${player.id}" style="animation: fadeIn 0.3s ease-out;">
+                <div class="pick-order-row p-5 bg-white hover:shadow-soft-lg transition-all duration-300" data-player-id="${player.id}" style="animation: fadeIn 0.3s ease-out;">
                     <div class="flex items-center gap-3 mb-3">
                         <img src="${image}" alt="${player.name}" 
-                             class="w-20 h-20 rounded-2xl object-cover border-2 border-pink-200 shadow-soft"
+                             class="w-20 h-20 rounded-lg object-contain border-2 border-gray-900 bg-white shadow-soft"
                              onerror="this.src='/static/images/placeholder.png'">
                         <div class="flex-1">
                             <div class="font-bold text-sm font-display text-gray-800">${this.escapeHtml(player.name)}</div>
@@ -567,6 +589,31 @@ document.addEventListener('alpine:init', () => {
     }));
 });
 
+async function updateDraftSettings(event) {
+    event.preventDefault();
+    const formData = new FormData(event.target);
+    const mode = formData.get('mode');
+
+    try {
+        const response = await fetch('/api/draft/settings', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ mode })
+        });
+
+        if (response.ok) {
+            setTimeout(() => window.location.reload(), 500);
+        } else {
+            const error = await response.text();
+            alert('Error updating draft system: ' + error);
+        }
+    } catch (err) {
+        alert('Error updating draft system: ' + err.message);
+    }
+}
+
 // Image upload functions
 async function uploadImage(event) {
     event.preventDefault();
@@ -625,7 +672,7 @@ async function loadImageGallery() {
         gallery.innerHTML = images.map(url => `
             <div class="relative group cursor-pointer" onclick="selectImage('${url}')">
                 <img src="${url}" alt="Uploaded image" 
-                     class="w-full h-24 object-cover rounded-xl border-2 border-pink-200 hover:border-pink-400 transition-all"
+                     class="w-full h-24 object-cover rounded-lg border-2 border-gray-900 transition-all"
                      onerror="this.style.display='none'">
                 <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 rounded-xl transition-all flex items-center justify-center">
                     <span class="text-white opacity-0 group-hover:opacity-100 text-xs font-semibold">Click to copy</span>

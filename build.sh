@@ -5,7 +5,7 @@ echo "Building Jellycat Fantasy Draft..."
 
 # Build Go application
 echo "Building Go binary..."
-go build -o jellycat-draft main.go
+go build -o jellycat-draft .
 
 # Compile TailwindCSS if CLI exists
 if [ -f "./tailwindcss-linux-x64" ]; then

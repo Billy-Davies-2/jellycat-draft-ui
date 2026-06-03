@@ -23,6 +23,7 @@ type MemoryDAL struct {
 	players       []models.Player
 	teams         []models.Team
 	chat          []models.ChatMessage
+	settings      models.DraftSettings
 	reactionUsers map[string]map[string]map[string]bool // messageID -> emote -> userID -> bool
 }
 
@@ -39,6 +40,7 @@ func NewMemoryDAL() *MemoryDAL {
 		players:       getDefaultPlayers(),
 		teams:         teams,
 		chat:          []models.ChatMessage{},
+		settings:      models.DefaultDraftSettings(),
 		reactionUsers: make(map[string]map[string]map[string]bool),
 	}
 
@@ -56,9 +58,10 @@ func (m *MemoryDAL) GetState() (*models.DraftState, error) {
 
 	// Create copies to avoid race conditions
 	state := &models.DraftState{
-		Players: make([]models.Player, len(m.players)),
-		Teams:   make([]models.Team, len(m.teams)),
-		Chat:    make([]models.ChatMessage, len(m.chat)),
+		Players:  make([]models.Player, len(m.players)),
+		Teams:    make([]models.Team, len(m.teams)),
+		Chat:     make([]models.ChatMessage, len(m.chat)),
+		Settings: m.settings,
 	}
 
 	copy(state.Players, m.players)
@@ -85,9 +88,21 @@ func (m *MemoryDAL) Reset() error {
 	m.players = getDefaultPlayers()
 	m.teams = teams
 	m.chat = []models.ChatMessage{}
+	m.settings = models.DefaultDraftSettings()
 	m.reactionUsers = make(map[string]map[string]map[string]bool)
 
 	return nil
+}
+
+func (m *MemoryDAL) SetDraftMode(mode models.DraftMode) (*models.DraftSettings, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	settings := models.DraftSettingsForMode(mode)
+	m.settings = settings
+	m.addChatMessageUnsafe(fmt.Sprintf("Draft mode set to %s", settings.Name), "system")
+
+	return &settings, nil
 }
 
 func (m *MemoryDAL) AddPlayer(player *models.Player) (*models.Player, error) {
@@ -254,6 +269,9 @@ func (m *MemoryDAL) DraftPlayer(playerID, teamID string) error {
 	}
 	if player.Drafted {
 		return fmt.Errorf("player already drafted")
+	}
+	if err := validateTeamTurn(m.teams, m.settings.Mode, m.players, teamID); err != nil {
+		return err
 	}
 
 	// Calculate current draft pick number

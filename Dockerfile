@@ -27,7 +27,7 @@ RUN CGO_ENABLED=1 GOOS=linux go build \
   -a \
   -ldflags '-linkmode external -extldflags "-static"' \
   -tags netgo,osusergo \
-  -o jellycat-draft main.go
+  -o jellycat-draft .
 
 # Use distroless for better SSL/TLS support in production
 # distroless/static-debian12 contains CA certificates and timezone data

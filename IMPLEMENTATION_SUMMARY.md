@@ -142,7 +142,7 @@ ENVIRONMENT=production NATS_URL=nats://prod:4222 ./jellycat-draft
 
 ### Build Verification ✅
 ```bash
-go build -o jellycat-draft main.go
+go build -o jellycat-draft .
 # Success - no errors
 ```
 

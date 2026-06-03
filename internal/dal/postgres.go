@@ -117,6 +117,12 @@ func (p *PostgresDAL) initSchema() error {
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);
 
+	CREATE TABLE IF NOT EXISTS draft_settings (
+		key TEXT PRIMARY KEY,
+		value TEXT NOT NULL,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
+
 	-- CloudNativePG optimization: Add indexes for common query patterns
 	CREATE INDEX IF NOT EXISTS idx_players_drafted ON players(drafted);
 	CREATE INDEX IF NOT EXISTS idx_players_points ON players(points DESC);
@@ -159,7 +165,43 @@ func (p *PostgresDAL) initSchema() error {
 		}
 	}
 
-	return nil
+	return p.ensureDefaultDraftSettings()
+}
+
+func (p *PostgresDAL) ensureDefaultDraftSettings() error {
+	_, err := p.db.Exec(`
+		INSERT INTO draft_settings (key, value)
+		VALUES ('mode', $1)
+		ON CONFLICT (key) DO NOTHING
+	`, string(models.DefaultDraftSettings().Mode))
+
+	return err
+}
+
+func (p *PostgresDAL) getDraftSettings() (models.DraftSettings, error) {
+	var mode string
+	err := p.db.QueryRow(`SELECT value FROM draft_settings WHERE key = 'mode'`).Scan(&mode)
+	if err == sql.ErrNoRows {
+		return models.DefaultDraftSettings(), p.ensureDefaultDraftSettings()
+	}
+	if err != nil {
+		return models.DraftSettings{}, err
+	}
+
+	return models.DraftSettingsForMode(models.DraftMode(mode)), nil
+}
+
+func (p *PostgresDAL) getDraftModeTx(ctx context.Context, tx *sql.Tx) (models.DraftMode, error) {
+	var mode string
+	err := tx.QueryRowContext(ctx, `SELECT value FROM draft_settings WHERE key = 'mode'`).Scan(&mode)
+	if err == sql.ErrNoRows {
+		return models.DefaultDraftSettings().Mode, nil
+	}
+	if err != nil {
+		return "", err
+	}
+
+	return models.NormalizeDraftMode(models.DraftMode(mode)), nil
 }
 
 func (p *PostgresDAL) seedData() error {
@@ -233,15 +275,26 @@ func (p *PostgresDAL) seedData() error {
 	p.AddChatMessage("Tip: Click a Jellycat card to draft it!", "system")
 	p.AddChatMessage("Who will snag Bashful Bunny first? 🐰", "system")
 
+	if err := p.ensureDefaultDraftSettings(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
 func (p *PostgresDAL) GetState() (*models.DraftState, error) {
 	state := &models.DraftState{
-		Players: []models.Player{},
-		Teams:   []models.Team{},
-		Chat:    []models.ChatMessage{},
+		Players:  []models.Player{},
+		Teams:    []models.Team{},
+		Chat:     []models.ChatMessage{},
+		Settings: models.DefaultDraftSettings(),
 	}
+
+	settings, err := p.getDraftSettings()
+	if err != nil {
+		return nil, err
+	}
+	state.Settings = settings
 
 	// Get players
 	rows, err := p.db.Query(`
@@ -346,7 +399,7 @@ func (p *PostgresDAL) GetState() (*models.DraftState, error) {
 
 func (p *PostgresDAL) Reset() error {
 	// Clear all tables
-	_, err := p.db.Exec("TRUNCATE team_players, chat, teams, players CASCADE")
+	_, err := p.db.Exec("TRUNCATE team_players, chat, draft_settings, teams, players CASCADE")
 	if err != nil {
 		return err
 	}
@@ -355,6 +408,25 @@ func (p *PostgresDAL) Reset() error {
 
 	// Re-seed
 	return p.seedData()
+}
+
+func (p *PostgresDAL) SetDraftMode(mode models.DraftMode) (*models.DraftSettings, error) {
+	settings := models.DraftSettingsForMode(mode)
+
+	_, err := p.db.Exec(`
+		INSERT INTO draft_settings (key, value, updated_at)
+		VALUES ('mode', $1, CURRENT_TIMESTAMP)
+		ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP
+	`, string(settings.Mode))
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := p.AddChatMessage(fmt.Sprintf("Draft mode set to %s", settings.Name), "system"); err != nil {
+		return nil, err
+	}
+
+	return &settings, nil
 }
 
 func (p *PostgresDAL) AddPlayer(player *models.Player) (*models.Player, error) {
@@ -532,6 +604,22 @@ func (p *PostgresDAL) DraftPlayer(playerID, teamID string) error {
 		return err
 	}
 
+	mode, err := p.getDraftModeTx(ctx, tx)
+	if err != nil {
+		return err
+	}
+	teams, err := postgresTeamsForTurn(ctx, tx)
+	if err != nil {
+		return err
+	}
+	players, err := postgresPlayersForTurn(ctx, tx)
+	if err != nil {
+		return err
+	}
+	if err := validateTeamTurn(teams, mode, players, teamID); err != nil {
+		return err
+	}
+
 	// Calculate cuddle points adjustment based on draft position
 	// Early picks (1-6) gain points, late picks (13-18) lose points
 	cuddlePointsAdjustment := 0
@@ -592,6 +680,48 @@ func (p *PostgresDAL) DraftPlayer(playerID, teamID string) error {
 	}
 
 	return tx.Commit()
+}
+
+func postgresTeamsForTurn(ctx context.Context, tx *sql.Tx) ([]models.Team, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT id, name, owner, mascot, color FROM teams ORDER BY created_at`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	teams := []models.Team{}
+	for rows.Next() {
+		var team models.Team
+		if err := rows.Scan(&team.ID, &team.Name, &team.Owner, &team.Mascot, &team.Color); err != nil {
+			return nil, err
+		}
+		team.Players = []models.Player{}
+		teams = append(teams, team)
+	}
+
+	return teams, rows.Err()
+}
+
+func postgresPlayersForTurn(ctx context.Context, tx *sql.Tx) ([]models.Player, error) {
+	rows, err := tx.QueryContext(ctx, `
+		SELECT id, name, position, team, points, cuddle_points, tier, drafted, COALESCE(drafted_by, ''), image
+		FROM players
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	players := []models.Player{}
+	for rows.Next() {
+		var player models.Player
+		if err := rows.Scan(&player.ID, &player.Name, &player.Position, &player.Team, &player.Points, &player.CuddlePoints, &player.Tier, &player.Drafted, &player.DraftedBy, &player.Image); err != nil {
+			return nil, err
+		}
+		players = append(players, player)
+	}
+
+	return players, rows.Err()
 }
 
 func (p *PostgresDAL) AddChatMessage(text, msgType string) (*models.ChatMessage, error) {

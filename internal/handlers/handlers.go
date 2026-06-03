@@ -111,6 +111,56 @@ func (h *APIHandlers) ResetDraft(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]bool{"ok": true})
 }
 
+// UpdateDraftSettings changes the active draft mode.
+func (h *APIHandlers) UpdateDraftSettings(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodPut {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var mode string
+	contentType := r.Header.Get("Content-Type")
+	if strings.Contains(contentType, "application/json") {
+		var req struct {
+			Mode string `json:"mode"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		mode = req.Mode
+	} else {
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		mode = r.FormValue("mode")
+	}
+
+	settings, err := h.dal.SetDraftMode(models.DraftMode(mode))
+	if err != nil {
+		logger.Error("Failed to update draft settings", "error", err, "mode", mode)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	h.pubsub.Publish(pubsub.Event{
+		Type: "draft:settings",
+		Payload: map[string]interface{}{
+			"mode": settings.Mode,
+		},
+	})
+	h.pubsub.Publish(pubsub.Event{
+		Type: "chat:add",
+		Payload: map[string]interface{}{
+			"type": "system",
+		},
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(settings)
+}
+
 // ListTeams returns all teams
 func (h *APIHandlers) ListTeams(w http.ResponseWriter, r *http.Request) {
 	state, err := h.dal.GetState()

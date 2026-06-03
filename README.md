@@ -62,7 +62,7 @@ A realtime fantasy draft application for Jellycat plush toys, built with **Go**,
    ```bash
    make build
    # or
-   go build -o jellycat-draft main.go
+  go build -o jellycat-draft .
    ```
 
 3. **Configure environment variables**

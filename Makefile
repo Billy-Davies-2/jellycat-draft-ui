@@ -35,7 +35,7 @@ all: build
 
 # Build the Go binary
 build:
-	go build -o jellycat-draft main.go
+	go build -o jellycat-draft .
 
 # Run all tests
 test:

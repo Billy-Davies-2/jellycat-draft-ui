@@ -1,0 +1,655 @@
+{{ define "content" }}
+<div class="stadium-shell min-h-screen px-3 py-4"
+     x-data="pickApp()"
+     x-init="init()"
+     data-current-team-id="{{ .CurrentTeamID }}"
+     data-current-team-name="{{ .CurrentTeamName }}"
+     data-current-pick="{{ .CurrentPick }}"
+     data-current-round="{{ .CurrentRound }}"
+    data-user-team-id="{{ .UserTeamID }}"
+    data-initial-room-code="{{ .InitialRoomCode }}">
+    <div class="max-w-6xl mx-auto relative z-10">
+        <section x-show="!hasTeam()" class="phone-lobby-shell" x-cloak>
+            <div class="scoreboard-panel p-5">
+                <div class="scoreboard-label">Phone Draft Lobby</div>
+                <h1 class="mt-1 text-4xl font-display font-black text-white">Join The Draft</h1>
+                <p class="mt-2 text-white/75 font-bold">Enter the room code, pick a username, and claim a team for this phone.</p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_24rem] gap-4">
+                <div class="card-jellycat p-5">
+                    <div class="section-kicker">Room Sign In</div>
+                    <form @submit.prevent="createTeam" class="mt-4 space-y-3">
+                        <label for="phone-room-code" class="sr-only">Room Code</label>
+                        <input id="phone-room-code" type="text" x-model="roomCode" class="input-jellycat room-code-input" placeholder="Room code" maxlength="4" autocomplete="one-time-code" required>
+
+                        <label for="phone-owner-name" class="sr-only">Username</label>
+                        <input id="phone-owner-name" type="text" x-model="ownerName" class="input-jellycat" placeholder="Username" maxlength="80" autocomplete="name" required>
+
+                        <label for="phone-team-name" class="sr-only">Team Name</label>
+                        <input id="phone-team-name" type="text" x-model="newTeamName" class="input-jellycat" placeholder="Team name" maxlength="80" required>
+
+                        <button type="submit" class="btn-jellycat w-full" :disabled="joiningInProgress">
+                            <span x-text="joiningInProgress ? 'Joining...' : 'Join Draft Room'"></span>
+                        </button>
+                    </form>
+                </div>
+
+                <div class="card-jellycat p-5">
+                    <div class="section-kicker">Existing Teams</div>
+                    <p class="mt-2 text-sm font-bold text-gray-600">Use the same code and username, then tap your team.</p>
+                    <div class="mt-4 grid grid-cols-1 gap-3 max-h-[28rem] overflow-y-auto pr-1">
+                        {{ range .Teams }}
+                        <button type="button"
+                                class="team-join-card"
+                                data-join-team-id="{{ .ID }}"
+                                data-join-team-name="{{ .Name }}"
+                                @click="joinTeam($el)">
+                            <span class="text-2xl">{{ .Mascot }}</span>
+                            <span class="min-w-0 flex-1 text-left">
+                                <span class="block font-display font-black text-gray-900 truncate">{{ .Name }}</span>
+                                <span class="block text-xs font-bold text-gray-600 truncate">{{ .Owner }}</span>
+                            </span>
+                            <span class="draft-pill text-xs">Join</span>
+                        </button>
+                        {{ end }}
+                    </div>
+                </div>
+            </div>
+
+            <a href="/draft" class="btn-football w-full">View Big Board</a>
+        </section>
+
+        <section x-show="hasTeam()" class="space-y-3" x-cloak>
+            <div class="broadcast-bar sticky top-0 z-40 overflow-hidden">
+                <div class="px-3 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <div class="min-w-0">
+                        <div class="scoreboard-label">Phone Pick View</div>
+                        <div class="font-display font-black text-white truncate">
+                            <span x-text="selectedTeamName || 'Your team'"></span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="draft-pill bg-yellow-300 text-gray-900 text-xs" x-text="turnStatus"></div>
+                        <button type="button" class="draft-pill bg-white text-gray-900 text-xs" @click="leaveTeam">Switch</button>
+                    </div>
+                </div>
+                <div class="border-t border-white/15 overflow-hidden">
+                    <div id="phone-turn-track" class="ticker-track py-1">
+                        {{ if .DraftOrder }}
+                        {{ range .DraftOrder }}
+                        <span class="ticker-item phone-turn-item {{ if .Active }}is-active{{ end }} {{ if .Completed }}is-completed{{ end }}"
+                              data-team-id="{{ .TeamID }}"
+                              data-pick="{{ .Pick }}"
+                              data-active="{{ .Active }}"
+                              data-completed="{{ .Completed }}">
+                            {{ if .Active }}Now{{ else }}Pick {{ .Pick }}{{ end }} / {{ .Mascot }} {{ .TeamName }}
+                        </span>
+                        {{ end }}
+                        {{ range .DraftOrder }}
+                        <span class="ticker-item phone-turn-item {{ if .Active }}is-active{{ end }} {{ if .Completed }}is-completed{{ end }}"
+                              data-team-id="{{ .TeamID }}"
+                              data-pick="{{ .Pick }}"
+                              data-active="{{ .Active }}"
+                              data-completed="{{ .Completed }}">
+                            {{ if .Active }}Now{{ else }}Pick {{ .Pick }}{{ end }} / {{ .Mascot }} {{ .TeamName }}
+                        </span>
+                        {{ end }}
+                        {{ else }}
+                        <span class="ticker-item">Draft order appears once teams join</span>
+                        {{ end }}
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_18rem] gap-3">
+                <div class="space-y-3 min-w-0">
+                    <div class="card-jellycat p-3">
+                        <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_12rem] gap-2">
+                            <input type="text" x-model="search" @input="filterPlayers" class="input-jellycat text-sm" placeholder="Search Jellycats">
+                            <select x-model="filterPosition" @change="filterPlayers" class="input-jellycat text-sm">
+                                <option value="">All Positions</option>
+                                <option value="CC">CC</option>
+                                <option value="SS">SS</option>
+                                <option value="HH">HH</option>
+                                <option value="DD">DD</option>
+                                <option value="CH">CH</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="phone-suggested-pick">
+                        {{ with .SuggestedPick }}
+                        <div class="pick-order-row p-3 suggested-player-card flex items-center gap-3">
+                            <img src="{{ .Player.Image }}" alt="{{ .Player.Name }}" class="w-16 h-16 rounded-lg object-contain border-2 border-gray-900 bg-white" onerror="this.src='/static/images/placeholder.png'">
+                            <div class="min-w-0 flex-1">
+                                <div class="section-kicker">Suggested Pick</div>
+                                <div class="mt-2 font-display font-black text-lg leading-tight text-gray-900 truncate">{{ .Player.Name }}</div>
+                                <div class="text-xs font-bold text-gray-600 line-clamp-2">{{ .Reason }}</div>
+                            </div>
+                            <div class="analytics-chip min-w-16">
+                                <span>Score</span>
+                                <strong>{{ .Confidence }}</strong>
+                            </div>
+                        </div>
+                        {{ end }}
+                    </div>
+
+                    {{ if .IsBingoMode }}
+                    <div class="pick-order-row p-3 bg-[#fff1d1]">
+                        <div class="section-kicker">Bingo Prompt</div>
+                        <div class="mt-2 font-display font-black text-gray-900">{{ .CurrentBingoPrompt }}</div>
+                    </div>
+                    {{ end }}
+
+                    <div class="card-jellycat overflow-hidden">
+                        <div class="px-3 py-2 border-b-2 border-gray-900 bg-[#fff1d1] flex items-center justify-between gap-3">
+                            <h2 class="font-display font-black text-lg text-gray-900">Available Jellycats</h2>
+                            <span class="cuddle-badge"><span id="pick-available-count"></span> left</span>
+                        </div>
+                        <div id="pick-players-grid" class="phone-players-grid">
+                            {{ range .Players }}
+                            {{ if not .Drafted }}
+                            <div role="button"
+                                 tabindex="0"
+                                 class="player-card phone-player-card {{ if .Analytics.Suggested }}suggested-player-card{{ end }} text-left"
+                                 data-player-card
+                                 :class="{ 'is-selected': selectedPlayerID === '{{ .ID }}' }"
+                                 data-player-id="{{ .ID }}"
+                                 data-player-name="{{ .Name }}"
+                                 data-position="{{ .Position }}"
+                                 @click="selectPick($el)"
+                                 @keydown.enter.prevent="selectPick($el)">
+                                <div class="product-frame p-2 pt-7 mb-3">
+                                    <img src="{{ .Image }}" alt="{{ .Name }}" class="w-full aspect-square rounded-lg object-contain bg-white" onerror="this.src='/static/images/placeholder.png'">
+                                </div>
+                                <div class="suggested-ribbon mb-2" data-suggested-ribbon {{ if not .Analytics.Suggested }}hidden{{ end }}>Suggested Pick</div>
+                                <div class="font-display font-black text-sm sm:text-base leading-tight text-gray-900">{{ .Name }}</div>
+                                <div class="mt-1 text-xs font-bold text-gray-600 truncate">{{ .Team }}</div>
+                                <div class="mt-3 flex items-center justify-between gap-2">
+                                    <span class="draft-pill text-xs">{{ .Position }}</span>
+                                    <span class="draft-pill text-xs">{{ .Analytics.PickScore }}</span>
+                                </div>
+                                <div class="mt-3 analytics-sparkline compact" aria-hidden="true">
+                                    {{ range .Analytics.Sparkline }}
+                                    <span class="analytics-bar" style="height: {{ . }}%"></span>
+                                    {{ end }}
+                                </div>
+                                <div class="mt-2 grid grid-cols-2 gap-2">
+                                    <div class="analytics-chip">
+                                        <span>Heat</span>
+                                        <strong>{{ .Analytics.CrowdHeat }}</strong>
+                                    </div>
+                                    <div class="analytics-chip">
+                                        <span>Fit</span>
+                                        <strong>{{ .Analytics.NeedFit }}</strong>
+                                    </div>
+                                </div>
+                                <div class="pick-lock-panel" x-show="selectedPlayerID === '{{ .ID }}'" x-transition x-cloak @click.stop>
+                                    <div class="min-w-0">
+                                        <div class="text-xs font-black uppercase text-gray-600">Ready To Draft</div>
+                                        <div class="font-display font-black text-gray-900 truncate">{{ .Name }}</div>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <button type="button" class="draft-pill bg-white text-gray-900 text-xs" @click.stop="clearPickSelection">Cancel</button>
+                                        <button type="button" class="pick-lock-button" :disabled="pickInProgress" @click.stop="lockPick($el.closest('[data-player-id]'))">
+                                            <span x-text="pickInProgress ? 'Locking...' : 'Lock Pick'"></span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            {{ end }}
+                            {{ end }}
+                        </div>
+                    </div>
+                </div>
+
+                <aside class="hidden lg:block space-y-3">
+                    <div class="scoreboard-panel p-4">
+                        <div class="scoreboard-label">On The Clock</div>
+                        <div class="mt-1 font-display font-black text-2xl text-white" x-text="currentTeamName || 'Draft complete'"></div>
+                        <div class="mt-2 text-sm font-bold text-white/70">Round <span x-text="currentRound"></span> / Pick <span x-text="currentPick"></span></div>
+                    </div>
+                    <div class="card-jellycat p-4">
+                        <div class="section-kicker">Draft Style</div>
+                        <div class="mt-3 font-display font-black text-gray-900">{{ .Settings.Name }}</div>
+                        <a href="/draft" class="btn-football w-full mt-4 text-sm">View Big Board</a>
+                    </div>
+                    {{ if .IsWheelMode }}
+                    <div class="card-jellycat p-4">
+                        <div class="section-kicker">Wheel</div>
+                        <div class="mt-3 space-y-2">
+                            {{ range .WheelSlots }}
+                            <div class="pick-order-row {{ if .Active }}is-active{{ end }} p-2 flex items-center gap-2">
+                                <span>{{ .Mascot }}</span>
+                                <span class="text-xs font-black text-gray-800 truncate">{{ .TeamName }}</span>
+                            </div>
+                            {{ end }}
+                        </div>
+                    </div>
+                    {{ end }}
+                </aside>
+            </div>
+        </section>
+    </div>
+
+    <div x-show="notification" x-transition class="fixed top-4 inset-x-4 z-50 max-w-md mx-auto" style="display: none;">
+        <div :class="{
+            'bg-green-100 border-green-400 text-green-800': notification && notification.type === 'success',
+            'bg-red-100 border-red-400 text-red-800': notification && notification.type === 'error',
+            'bg-blue-100 border-blue-400 text-blue-800': notification && notification.type === 'info'
+        }" class="border-2 px-4 py-3 rounded-lg shadow-soft-lg font-bold">
+            <p x-text="notification ? notification.message : ''"></p>
+        </div>
+    </div>
+</div>
+
+<script>
+function pickApp() {
+    return {
+        selectedTeamID: '',
+        selectedTeamName: '',
+        newTeamName: '',
+        ownerName: '',
+        roomCode: '',
+        joiningInProgress: false,
+        currentTeamID: '',
+        currentTeamName: '',
+        currentPick: 0,
+        currentRound: 0,
+        turnStatus: 'Waiting',
+        search: '',
+        filterPosition: '',
+        notification: null,
+        selectedPlayerID: '',
+        selectedPlayerName: '',
+        pickInProgress: false,
+
+        init() {
+            this.currentTeamID = this.$el.dataset.currentTeamId || '';
+            this.currentTeamName = this.$el.dataset.currentTeamName || '';
+            this.currentPick = Number(this.$el.dataset.currentPick || 0);
+            this.currentRound = Number(this.$el.dataset.currentRound || 0);
+            const queryRoomCode = new URLSearchParams(window.location.search).get('code') || '';
+            const initialRoomCode = this.$el.dataset.initialRoomCode || queryRoomCode;
+            this.roomCode = this.normalizeRoomCode(initialRoomCode || localStorage.getItem('jellycat_room_code') || '');
+            const storedTeamID = localStorage.getItem('jellycat_team_id') || '';
+            const userTeamID = this.$el.dataset.userTeamId || '';
+            const initialTeamID = storedTeamID || userTeamID;
+            const currentTeamName = this.findTeamName(initialTeamID);
+            if (initialTeamID && currentTeamName) {
+                this.selectedTeamID = initialTeamID;
+                this.selectedTeamName = localStorage.getItem('jellycat_team_name') || currentTeamName;
+            } else {
+                localStorage.removeItem('jellycat_team_id');
+                localStorage.removeItem('jellycat_team_name');
+            }
+            this.ownerName = localStorage.getItem('jellycat_owner') || '';
+
+            this.$nextTick(() => {
+                this.updateAvailableCount();
+                this.updateTurnBanner();
+            });
+
+            const eventSource = new EventSource('/api/events');
+            eventSource.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'draft:pick') {
+                        const playerID = data.payload?.playerId;
+                        if (playerID) {
+                            const playerCard = document.querySelector(`[data-player-id="${playerID}"]`);
+                            if (playerCard) playerCard.remove();
+                            if (this.selectedPlayerID === playerID) {
+                                this.clearPickSelection();
+                            }
+                        }
+                        this.refreshState();
+                        this.updateAvailableCount();
+                    } else if (data.type === 'draft:reset' || data.type === 'draft:settings') {
+                        window.location.reload();
+                    } else if (data.type === 'teams:add' || data.type === 'teams:update') {
+                        if (!this.hasTeam() && !this.joiningInProgress) {
+                            window.location.reload();
+                        }
+                    }
+                } catch (err) {
+                    // Ignore keepalive frames.
+                }
+            };
+        },
+
+        hasTeam() {
+            return Boolean(this.selectedTeamID);
+        },
+
+        async createTeam() {
+            const name = this.newTeamName.trim();
+            if (!this.validateRoomFields(true)) {
+                return;
+            }
+
+            this.joiningInProgress = true;
+            try {
+                const response = await fetch('/api/room/join', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        code: this.roomCode,
+                        username: this.ownerName.trim(),
+                        teamName: name
+                    })
+                });
+
+                if (!response.ok) {
+                    const message = await response.text();
+                    this.showNotification(message || 'Team creation failed.', 'error');
+                    return;
+                }
+
+                const result = await response.json();
+                this.setTeam(result.team.id, result.team.name, result.code);
+                localStorage.setItem('jellycat_owner', this.ownerName.trim());
+                this.showNotification(`${result.team.name} joined the draft.`, 'success');
+                setTimeout(() => window.location.reload(), 350);
+            } catch (err) {
+                this.showNotification('Team creation failed: ' + err.message, 'error');
+            } finally {
+                this.joiningInProgress = false;
+            }
+        },
+
+        async joinTeam(button) {
+            if (!this.validateRoomFields(false)) {
+                return;
+            }
+
+            this.joiningInProgress = true;
+            try {
+                const response = await fetch('/api/room/join', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        code: this.roomCode,
+                        username: this.ownerName.trim(),
+                        teamId: button.dataset.joinTeamId
+                    })
+                });
+
+                if (!response.ok) {
+                    const message = await response.text();
+                    this.showNotification(message || 'Room join failed.', 'error');
+                    return;
+                }
+
+                const result = await response.json();
+                this.setTeam(result.team.id, result.team.name, result.code);
+                localStorage.setItem('jellycat_owner', this.ownerName.trim());
+                this.showNotification(`${this.selectedTeamName} joined on this phone.`, 'success');
+                this.$nextTick(() => this.updateTurnBanner());
+            } catch (err) {
+                this.showNotification('Room join failed: ' + err.message, 'error');
+            } finally {
+                this.joiningInProgress = false;
+            }
+        },
+
+        setTeam(id, name, code = '') {
+            this.selectedTeamID = id || '';
+            this.selectedTeamName = name || this.findTeamName(id) || 'Your team';
+            const joinedCode = this.normalizeRoomCode(code || this.roomCode);
+            this.roomCode = joinedCode;
+            localStorage.setItem('jellycat_team_id', this.selectedTeamID);
+            localStorage.setItem('jellycat_team_name', this.selectedTeamName);
+            if (joinedCode) {
+                localStorage.setItem('jellycat_room_code', joinedCode);
+            }
+            this.updateTurnBanner();
+        },
+
+        leaveTeam() {
+            localStorage.removeItem('jellycat_team_id');
+            localStorage.removeItem('jellycat_team_name');
+            this.selectedTeamID = '';
+            this.selectedTeamName = '';
+            this.turnStatus = 'Waiting';
+        },
+
+        validateRoomFields(requireTeamName) {
+            this.roomCode = this.normalizeRoomCode(this.roomCode);
+            if (this.roomCode.length !== 4) {
+                this.showNotification('Enter the 4-character room code.', 'error');
+                return false;
+            }
+            if (!this.ownerName.trim()) {
+                this.showNotification('Username is required.', 'error');
+                return false;
+            }
+            if (requireTeamName && !this.newTeamName.trim()) {
+                this.showNotification('Team name is required.', 'error');
+                return false;
+            }
+            return true;
+        },
+
+        normalizeRoomCode(value) {
+            return String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+        },
+
+        findTeamName(id) {
+            if (!id) return '';
+            const teamButton = Array.from(document.querySelectorAll('[data-join-team-id]')).find((button) => button.dataset.joinTeamId === id);
+            return teamButton ? teamButton.dataset.joinTeamName : '';
+        },
+
+        selectedDisplayName() {
+            return this.selectedTeamName || this.findTeamName(this.selectedTeamID) || 'your team';
+        },
+
+        selectPick(card) {
+            if (!this.hasTeam()) {
+                this.showNotification('Create or join a team first.', 'error');
+                return false;
+            }
+            if (!this.currentTeamID) {
+                this.showNotification('The draft is complete.', 'info');
+                return false;
+            }
+            if (this.selectedTeamID !== this.currentTeamID) {
+                this.showNotification(`${this.selectedDisplayName()} is not on the clock. ${this.turnStatus}.`, 'error');
+                return false;
+            }
+
+            this.selectedPlayerID = card.dataset.playerId || '';
+            this.selectedPlayerName = card.dataset.playerName || '';
+            return Boolean(this.selectedPlayerID);
+        },
+
+        clearPickSelection() {
+            this.selectedPlayerID = '';
+            this.selectedPlayerName = '';
+        },
+
+        async lockPick(card) {
+            if (!card || this.pickInProgress) return;
+            if (!this.selectPick(card)) return;
+
+            const playerID = card.dataset.playerId;
+            const playerName = card.dataset.playerName;
+            this.pickInProgress = true;
+
+            try {
+                const response = await fetch('/api/draft/pick', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ playerId: playerID, teamId: this.selectedTeamID })
+                });
+
+                if (!response.ok) {
+                    const message = await response.text();
+                    this.showNotification(message || 'Pick failed.', 'error');
+                    return;
+                }
+
+                card.remove();
+                this.clearPickSelection();
+                this.updateAvailableCount();
+                this.showNotification(`${playerName} picked.`, 'success');
+                await this.refreshState();
+            } catch (err) {
+                this.showNotification('Pick failed: ' + err.message, 'error');
+            } finally {
+                this.pickInProgress = false;
+            }
+        },
+
+        async refreshState() {
+            try {
+                const response = await fetch('/api/draft/state');
+                if (!response.ok) return;
+                const state = await response.json();
+                this.currentTeamID = state.currentTeamId || '';
+                this.currentTeamName = state.currentTeamName || '';
+                this.currentPick = state.currentPick || 0;
+                this.currentRound = state.currentRound || 0;
+                this.renderTurnBanner(state.draftOrder || []);
+                this.renderSuggestedPick(state.suggestedPick || null);
+                this.updateTurnBanner();
+            } catch (err) {
+                console.error('Failed to refresh state:', err);
+            }
+        },
+
+        renderSuggestedPick(suggestedPick) {
+            const container = document.getElementById('phone-suggested-pick');
+            const suggestedPlayerID = suggestedPick?.player?.id || '';
+            this.updateSuggestedMarkers(suggestedPlayerID);
+            if (!container) return;
+
+            if (!suggestedPick || !suggestedPick.player) {
+                container.innerHTML = '';
+                return;
+            }
+
+            const player = suggestedPick.player;
+            const image = this.escapeHtml(player.image || '/static/images/placeholder.png');
+            const name = this.escapeHtml(player.name || 'Recommended Jellycat');
+            const reason = this.escapeHtml(suggestedPick.reason || 'Best available fit for the team on the clock.');
+            const confidence = this.escapeHtml(String(suggestedPick.confidence || player.analytics?.pickScore || ''));
+            container.innerHTML = `
+                <div class="pick-order-row p-3 suggested-player-card flex items-center gap-3">
+                    <img src="${image}" alt="${name}" class="w-16 h-16 rounded-lg object-contain border-2 border-gray-900 bg-white" onerror="this.src='/static/images/placeholder.png'">
+                    <div class="min-w-0 flex-1">
+                        <div class="section-kicker">Suggested Pick</div>
+                        <div class="mt-2 font-display font-black text-lg leading-tight text-gray-900 truncate">${name}</div>
+                        <div class="text-xs font-bold text-gray-600 line-clamp-2">${reason}</div>
+                    </div>
+                    <div class="analytics-chip min-w-16">
+                        <span>Score</span>
+                        <strong>${confidence}</strong>
+                    </div>
+                </div>`;
+        },
+
+        updateSuggestedMarkers(suggestedPlayerID) {
+            document.querySelectorAll('[data-player-card]').forEach((card) => {
+                const isSuggested = Boolean(suggestedPlayerID) && card.dataset.playerId === suggestedPlayerID;
+                card.classList.toggle('suggested-player-card', isSuggested);
+                const ribbon = card.querySelector('[data-suggested-ribbon]');
+                if (ribbon) ribbon.hidden = !isSuggested;
+            });
+        },
+
+        renderTurnBanner(draftOrder) {
+            const track = document.getElementById('phone-turn-track');
+            if (!track || !draftOrder.length) return;
+
+            const entries = draftOrder.concat(draftOrder);
+            track.innerHTML = entries.map((entry) => {
+                const activeClass = entry.active ? ' is-active' : '';
+                const completedClass = entry.completed ? ' is-completed' : '';
+                const label = entry.active ? 'Now' : `Pick ${entry.pick}`;
+                return `<span class="ticker-item phone-turn-item${activeClass}${completedClass}" data-team-id="${this.escapeHtml(entry.teamId)}" data-pick="${entry.pick}" data-active="${entry.active}" data-completed="${entry.completed}">${label} / ${this.escapeHtml(entry.mascot)} ${this.escapeHtml(entry.teamName)}</span>`;
+            }).join('');
+        },
+
+        updateTurnBanner() {
+            const items = Array.from(document.querySelectorAll('#phone-turn-track .phone-turn-item'));
+            items.forEach((item) => item.classList.toggle('is-mine', item.dataset.teamId === this.selectedTeamID));
+
+            if (!this.currentTeamID) {
+                this.turnStatus = 'Draft complete';
+                return;
+            }
+            if (!this.hasTeam()) {
+                this.turnStatus = 'Join a team';
+                return;
+            }
+            if (this.selectedTeamID === this.currentTeamID) {
+                this.turnStatus = 'You are on the clock';
+                return;
+            }
+
+            const seenPicks = new Set();
+            const uniqueItems = items.filter((item) => {
+                if (seenPicks.has(item.dataset.pick)) return false;
+                seenPicks.add(item.dataset.pick);
+                return true;
+            });
+            const currentIndex = uniqueItems.findIndex((item) => item.dataset.active === 'true');
+            const myNextIndex = uniqueItems.findIndex((item) => item.dataset.teamId === this.selectedTeamID && item.dataset.completed !== 'true' && Number(item.dataset.pick) >= this.currentPick);
+
+            if (currentIndex >= 0 && myNextIndex >= 0) {
+                const picksAway = myNextIndex - currentIndex;
+                if (picksAway === 1) {
+                    this.turnStatus = 'You pick next';
+                } else {
+                    this.turnStatus = `You pick in ${picksAway} picks`;
+                }
+                return;
+            }
+
+            this.turnStatus = `On the clock: ${this.currentTeamName || 'another team'}`;
+        },
+
+        filterPlayers() {
+            const players = document.querySelectorAll('#pick-players-grid > [data-player-card]');
+            let visibleCount = 0;
+            players.forEach((player) => {
+                const nameMatches = !this.search || player.textContent.toLowerCase().includes(this.search.toLowerCase());
+                const positionMatches = !this.filterPosition || player.dataset.position === this.filterPosition;
+                if (nameMatches && positionMatches) {
+                    player.style.display = '';
+                    visibleCount++;
+                } else {
+                    player.style.display = 'none';
+                }
+            });
+            this.setAvailableCount(visibleCount);
+        },
+
+        updateAvailableCount() {
+            this.setAvailableCount(document.querySelectorAll('#pick-players-grid > [data-player-card]').length);
+        },
+
+        setAvailableCount(count) {
+            const counter = document.getElementById('pick-available-count');
+            if (counter) counter.textContent = count;
+        },
+
+        showNotification(message, type = 'info') {
+            this.notification = { message, type };
+            setTimeout(() => {
+                this.notification = null;
+            }, 3000);
+        },
+
+        escapeHtml(value) {
+            const div = document.createElement('div');
+            div.textContent = value || '';
+            return div.innerHTML;
+        }
+    };
+}
+</script>
+{{ end }}

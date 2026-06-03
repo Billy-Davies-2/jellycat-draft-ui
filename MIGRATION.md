@@ -197,7 +197,7 @@ PORT=3000 bun start
 
 ### After (Go)
 ```bash
-go build -o jellycat-draft main.go
+go build -o jellycat-draft .
 PORT=3000 ./jellycat-draft
 ```
 
