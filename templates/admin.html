@@ -70,7 +70,7 @@
                         
                         <div>
                             <label class="block text-sm font-semibold text-gray-800 mb-2 font-display">Image URL</label>
-                            <input type="text" name="image" placeholder="/static/images/jellycat-name.png" class="input-jellycat">
+                            <input type="text" name="image" placeholder="/images/jellycat-name.png" class="input-jellycat">
                         </div>
                         
                         <button type="submit" class="btn-jellycat w-full">
@@ -195,7 +195,7 @@
                     <div class="flex items-center gap-3 mb-3">
                         <img src="{{ .Image }}" alt="{{ .Name }}" 
                              class="w-20 h-20 rounded-lg object-contain border-2 border-gray-900 bg-white shadow-soft"
-                             onerror="this.src='/static/images/placeholder.png'">
+                             onerror="this.src='/images/placeholder.png'">
                         <div class="flex-1">
                             <div class="font-bold text-sm font-display text-gray-800">{{ .Name }}</div>
                             <div class="text-xs text-gray-600 mt-1">{{ .Team }}</div>
@@ -406,7 +406,7 @@
                     
                     <div>
                         <label class="block text-sm font-semibold text-gray-800 mb-2 font-display">Image URL</label>
-                        <input type="text" id="editImage" name="image" placeholder="/static/images/jellycat-name.png" class="input-jellycat">
+                        <input type="text" id="editImage" name="image" placeholder="/images/jellycat-name.png" class="input-jellycat">
                     </div>
                     
                     <div class="flex gap-3">
@@ -521,7 +521,7 @@ document.addEventListener('alpine:init', () => {
                               player.tier === 'B' ? 'bg-blue-200 text-blue-900' :
                               'bg-gray-200 text-gray-800';
             
-            const image = player.image || '/static/images/placeholder.png';
+            const image = player.image || '/images/placeholder.png';
             const cuddlePoints = player.cuddlePoints || player.points || 0;
             
             return `
@@ -529,7 +529,7 @@ document.addEventListener('alpine:init', () => {
                     <div class="flex items-center gap-3 mb-3">
                         <img src="${image}" alt="${player.name}" 
                              class="w-20 h-20 rounded-lg object-contain border-2 border-gray-900 bg-white shadow-soft"
-                             onerror="this.src='/static/images/placeholder.png'">
+                             onerror="this.src='/images/placeholder.png'">
                         <div class="flex-1">
                             <div class="font-bold text-sm font-display text-gray-800">${this.escapeHtml(player.name)}</div>
                             <div class="text-xs text-gray-600 mt-1">${this.escapeHtml(player.team)}</div>
@@ -735,7 +735,7 @@ async function addPlayer(event) {
         tier: formData.get('tier'),
         team: formData.get('team'),
         cuddlePoints: parseInt(formData.get('cuddlePoints')) || 0,
-        image: formData.get('image') || '/static/images/placeholder.png'
+        image: formData.get('image') || '/images/placeholder.png'
     };
     
     try {

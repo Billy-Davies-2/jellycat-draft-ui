@@ -188,29 +188,43 @@ func (a *AuthentikAuth) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 // Middleware protects routes requiring authentication
 func (a *AuthentikAuth) Middleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Get session cookie
-		cookie, err := r.Cookie("session_id")
-		if err != nil {
-			// Not authenticated, redirect to login
+		user := a.userFromRequest(r)
+		if user == nil {
 			http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
 			return
 		}
 
-		// Get session
-		a.sessionMu.RLock()
-		session, exists := a.sessions[cookie.Value]
-		a.sessionMu.RUnlock()
-
-		if !exists || time.Now().After(session.ExpiresAt) {
-			// Session expired or invalid
-			http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
-			return
-		}
-
-		// Add user to context
-		ctx := context.WithValue(r.Context(), "user", session.User)
+		ctx := context.WithValue(r.Context(), "user", user)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	}
+}
+
+// OptionalMiddleware attaches a user when a valid session exists, but allows anonymous reads.
+func (a *AuthentikAuth) OptionalMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if user := a.userFromRequest(r); user != nil {
+			ctx := context.WithValue(r.Context(), "user", user)
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
+		next.ServeHTTP(w, r)
+	}
+}
+
+func (a *AuthentikAuth) userFromRequest(r *http.Request) *User {
+	cookie, err := r.Cookie("session_id")
+	if err != nil {
+		return nil
+	}
+
+	a.sessionMu.RLock()
+	session, exists := a.sessions[cookie.Value]
+	a.sessionMu.RUnlock()
+
+	if !exists || session == nil || time.Now().After(session.ExpiresAt) {
+		return nil
+	}
+	return session.User
 }
 
 // GetUser retrieves the authenticated user from the request context
@@ -363,55 +377,46 @@ func (m *MockAuth) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/start", http.StatusSeeOther)
 }
 
-// Middleware for mock auth - auto-creates session for dev convenience
+// Middleware for mock auth protects routes and sends anonymous users through explicit login.
 func (m *MockAuth) Middleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		cookie, err := r.Cookie("session_id")
-
-		// Check if we have a valid session
-		var session *Session
-		var exists bool
-
-		if err == nil {
-			m.sessionMu.RLock()
-			session, exists = m.sessions[cookie.Value]
-			m.sessionMu.RUnlock()
+		user := m.userFromRequest(r)
+		if user == nil {
+			http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
+			return
 		}
 
-		// If no valid session, auto-create one for dev convenience
-		if !exists || session == nil || time.Now().After(session.ExpiresAt) {
-			// Auto-authenticate as test user
-			sessionID := generateSessionID()
-			session = &Session{
-				ID: sessionID,
-				User: &User{
-					ID:       "dev-user-123",
-					Email:    "billy@jellycat.local",
-					Name:     "Billy",
-					Username: "Billy",
-					Groups:   []string{"users", "admins"},
-				},
-				CreatedAt: time.Now(),
-				ExpiresAt: time.Now().Add(24 * time.Hour),
-			}
-
-			m.sessionMu.Lock()
-			m.sessions[sessionID] = session
-			m.sessionMu.Unlock()
-
-			// Set session cookie
-			http.SetCookie(w, &http.Cookie{
-				Name:     "session_id",
-				Value:    sessionID,
-				Path:     "/",
-				HttpOnly: true,
-				Expires:  session.ExpiresAt,
-			})
-		}
-
-		ctx := context.WithValue(r.Context(), "user", session.User)
+		ctx := context.WithValue(r.Context(), "user", user)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	}
+}
+
+// OptionalMiddleware attaches the mock user only when a dev session already exists.
+func (m *MockAuth) OptionalMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if user := m.userFromRequest(r); user != nil {
+			ctx := context.WithValue(r.Context(), "user", user)
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
+		next.ServeHTTP(w, r)
+	}
+}
+
+func (m *MockAuth) userFromRequest(r *http.Request) *User {
+	cookie, err := r.Cookie("session_id")
+	if err != nil {
+		return nil
+	}
+
+	m.sessionMu.RLock()
+	session, exists := m.sessions[cookie.Value]
+	m.sessionMu.RUnlock()
+
+	if !exists || session == nil || time.Now().After(session.ExpiresAt) {
+		return nil
+	}
+	return session.User
 }
 
 // AuthProvider is a common interface for authentication providers
@@ -420,4 +425,5 @@ type AuthProvider interface {
 	CallbackHandler(w http.ResponseWriter, r *http.Request)
 	LogoutHandler(w http.ResponseWriter, r *http.Request)
 	Middleware(next http.HandlerFunc) http.HandlerFunc
+	OptionalMiddleware(next http.HandlerFunc) http.HandlerFunc
 }

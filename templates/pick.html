@@ -121,7 +121,7 @@
                     <div id="phone-suggested-pick">
                         {{ with .SuggestedPick }}
                         <div class="pick-order-row p-3 suggested-player-card flex items-center gap-3">
-                            <img src="{{ .Player.Image }}" alt="{{ .Player.Name }}" class="w-16 h-16 rounded-lg object-contain border-2 border-gray-900 bg-white" onerror="this.src='/static/images/placeholder.png'">
+                            <img src="{{ .Player.Image }}" alt="{{ .Player.Name }}" class="w-16 h-16 rounded-lg object-contain border-2 border-gray-900 bg-white" onerror="this.src='/images/placeholder.png'">
                             <div class="min-w-0 flex-1">
                                 <div class="section-kicker">Suggested Pick</div>
                                 <div class="mt-2 font-display font-black text-lg leading-tight text-gray-900 truncate">{{ .Player.Name }}</div>
@@ -161,7 +161,7 @@
                                  @click="selectPick($el)"
                                  @keydown.enter.prevent="selectPick($el)">
                                 <div class="product-frame p-2 pt-7 mb-3">
-                                    <img src="{{ .Image }}" alt="{{ .Name }}" class="w-full aspect-square rounded-lg object-contain bg-white" onerror="this.src='/static/images/placeholder.png'">
+                                    <img src="{{ .Image }}" alt="{{ .Name }}" class="w-full aspect-square rounded-lg object-contain bg-white" onerror="this.src='/images/placeholder.png'">
                                 </div>
                                 <div class="suggested-ribbon mb-2" data-suggested-ribbon {{ if not .Analytics.Suggested }}hidden{{ end }}>Suggested Pick</div>
                                 <div class="font-display font-black text-sm sm:text-base leading-tight text-gray-900">{{ .Name }}</div>
@@ -532,13 +532,13 @@ function pickApp() {
             }
 
             const player = suggestedPick.player;
-            const image = this.escapeHtml(player.image || '/static/images/placeholder.png');
+            const image = this.escapeHtml(player.image || '/images/placeholder.png');
             const name = this.escapeHtml(player.name || 'Recommended Jellycat');
             const reason = this.escapeHtml(suggestedPick.reason || 'Best available fit for the team on the clock.');
             const confidence = this.escapeHtml(String(suggestedPick.confidence || player.analytics?.pickScore || ''));
             container.innerHTML = `
                 <div class="pick-order-row p-3 suggested-player-card flex items-center gap-3">
-                    <img src="${image}" alt="${name}" class="w-16 h-16 rounded-lg object-contain border-2 border-gray-900 bg-white" onerror="this.src='/static/images/placeholder.png'">
+                    <img src="${image}" alt="${name}" class="w-16 h-16 rounded-lg object-contain border-2 border-gray-900 bg-white" onerror="this.src='/images/placeholder.png'">
                     <div class="min-w-0 flex-1">
                         <div class="section-kicker">Suggested Pick</div>
                         <div class="mt-2 font-display font-black text-lg leading-tight text-gray-900 truncate">${name}</div>

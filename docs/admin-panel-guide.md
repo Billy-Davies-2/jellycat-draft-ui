@@ -62,7 +62,7 @@ Reset the draft and manage draft settings
 | **Tier** | Rarity tier | S, A, B, C | ✅ |
 | **Team** | Category/team | e.g., Woodland, Safari | ✅ |
 | **Cuddle Points** | Initial points | Number (0+) | ✅ |
-| **Image URL** | Path to image | e.g., /static/images/name.png | Optional |
+| **Image URL** | Path to image | e.g., /images/name.png | Optional |
 
 ### Position Types
 
@@ -86,7 +86,7 @@ Position: CC (Cuddle Companion)
 Tier: A (Amazing)
 Team: Woodland
 Cuddle Points: 65
-Image URL: /static/images/bashful-bunny.png
+Image URL: /images/bashful-bunny.png
 ```
 
 Click **➕ Add Jellycat** to save.
@@ -331,7 +331,7 @@ done < points.csv
 
 **Solution**:
 1. Verify image exists at specified path
-2. Check image URL format: `/static/images/filename.png`
+2. Check image URL format: `/images/filename.png`
 3. Ensure images are included in deployment
 4. Use placeholder if image is missing (automatic fallback)
 

@@ -16,6 +16,8 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 pnpm-lock.yaml
+cypress/screenshots/
+cypress/videos/
 
 # env files
 .env*

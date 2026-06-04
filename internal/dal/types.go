@@ -19,3 +19,10 @@ type DraftDAL interface {
 	UpdateTeam(id, name, owner, mascot, color string) (*models.Team, error)
 	DeleteTeam(id string) error
 }
+
+// ImageStore stores user-managed image assets outside the application image.
+type ImageStore interface {
+	GetImageByPath(path string) ([]byte, string, error)
+	SaveImage(path, contentType string, data []byte) error
+	ListImages() ([]string, error)
+}

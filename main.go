@@ -260,11 +260,11 @@ func main() {
 
 	// Page routes
 	mux.HandleFunc("/", homeHandler)
-	mux.HandleFunc("/start", authProvider.Middleware(startHandler))
-	mux.HandleFunc("/draft", authProvider.Middleware(draftHandler))
+	mux.HandleFunc("/start", authProvider.OptionalMiddleware(startHandler))
+	mux.HandleFunc("/draft", authProvider.OptionalMiddleware(draftHandler))
 	mux.HandleFunc("/join", pickHandler)
 	mux.HandleFunc("/pick", pickHandler)
-	mux.HandleFunc("/results", authProvider.Middleware(resultsHandler))
+	mux.HandleFunc("/results", authProvider.OptionalMiddleware(resultsHandler))
 	mux.HandleFunc("/admin", authProvider.Middleware(adminHandler))
 
 	// API routes
@@ -273,9 +273,10 @@ func main() {
 	// Draft API
 	mux.HandleFunc("/api/draft/state", api.GetDraftState)
 	mux.HandleFunc("/api/draft/pick", api.DraftPick)
-	mux.HandleFunc("/api/draft/reset", api.ResetDraft)
-	mux.HandleFunc("/api/draft/settings", api.UpdateDraftSettings)
+	mux.HandleFunc("/api/draft/reset", authProvider.Middleware(requireAdmin(api.ResetDraft)))
+	mux.HandleFunc("/api/draft/settings", authProvider.Middleware(requireAdmin(api.UpdateDraftSettings)))
 	mux.HandleFunc("/api/room", roomInfoHandler)
+	mux.HandleFunc("/api/room/qr", roomQRHandler)
 	mux.HandleFunc("/api/room/join", roomJoinHandler)
 
 	// Teams API
@@ -320,6 +321,16 @@ func main() {
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		logger.Error("Server failed", "error", err)
 		log.Fatal(err)
+	}
+}
+
+func requireAdmin(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !auth.IsAdmin(auth.GetUser(r)) {
+			http.Error(w, "Forbidden: Admin access required", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
 	}
 }
 
@@ -727,15 +738,14 @@ func readinessHandler(w http.ResponseWriter, r *http.Request) {
 
 // serveImageHandler serves images from the database or falls back to static files
 func serveImageHandler(w http.ResponseWriter, r *http.Request) {
-	// Extract the image path
-	imagePath := "/static" + r.URL.Path // Convert /images/xyz.png to /static/images/xyz.png
-
-	// Try to get image from database if using PostgresDAL
-	if pgDAL, ok := dataStore.(*dal.PostgresDAL); ok {
-		imageData, err := pgDAL.GetPlayerImageByPath(imagePath)
+	// Try to get image from database if the DAL supports image storage.
+	if imageStore, ok := dataStore.(dal.ImageStore); ok {
+		imageData, contentType, err := imageStore.GetImageByPath(r.URL.Path)
 		if err == nil && len(imageData) > 0 {
-			// Successfully retrieved from database
-			w.Header().Set("Content-Type", "image/png")
+			if contentType == "" {
+				contentType = "application/octet-stream"
+			}
+			w.Header().Set("Content-Type", contentType)
 			w.Header().Set("Cache-Control", "public, max-age=31536000") // Cache for 1 year
 			w.Write(imageData)
 			return

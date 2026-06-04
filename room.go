@@ -12,6 +12,7 @@ import (
 
 	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/models"
 	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/pubsub"
+	qrcode "github.com/skip2/go-qrcode"
 )
 
 const roomCodeLength = 4
@@ -118,7 +119,30 @@ func roomInfoHandler(w http.ResponseWriter, r *http.Request) {
 		"code":     draftRoom.Code(),
 		"joinPath": joinPath(),
 		"joinUrl":  joinURL(r),
+		"qrPath":   joinQRPath(),
 	})
+}
+
+func roomQRHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if code := normalizeRoomCode(r.URL.Query().Get("code")); code != "" && !draftRoom.Matches(code) {
+		http.Error(w, "Invalid room code", http.StatusUnauthorized)
+		return
+	}
+
+	png, err := qrcode.Encode(joinURL(r), qrcode.Medium, 512)
+	if err != nil {
+		http.Error(w, "Failed to generate QR code", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "no-store")
+	_, _ = w.Write(png)
 }
 
 func roomJoinHandler(w http.ResponseWriter, r *http.Request) {
@@ -234,14 +258,19 @@ func publishRoomJoinEvents(team *models.Team) {
 
 func roomTemplateData(r *http.Request) map[string]string {
 	return map[string]string{
-		"RoomCode": draftRoom.Code(),
-		"JoinPath": joinPath(),
-		"JoinURL":  joinURL(r),
+		"RoomCode":   draftRoom.Code(),
+		"JoinPath":   joinPath(),
+		"JoinURL":    joinURL(r),
+		"JoinQRPath": joinQRPath(),
 	}
 }
 
 func joinPath() string {
 	return "/join?code=" + url.QueryEscape(draftRoom.Code())
+}
+
+func joinQRPath() string {
+	return "/api/room/qr?code=" + url.QueryEscape(draftRoom.Code())
 }
 
 func joinURL(r *http.Request) string {

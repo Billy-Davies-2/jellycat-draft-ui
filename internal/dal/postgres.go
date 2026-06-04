@@ -123,12 +123,22 @@ func (p *PostgresDAL) initSchema() error {
 		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);
 
+	CREATE TABLE IF NOT EXISTS images (
+		path TEXT PRIMARY KEY,
+		filename TEXT NOT NULL,
+		content_type TEXT NOT NULL,
+		data BYTEA NOT NULL,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
+
 	-- CloudNativePG optimization: Add indexes for common query patterns
 	CREATE INDEX IF NOT EXISTS idx_players_drafted ON players(drafted);
 	CREATE INDEX IF NOT EXISTS idx_players_points ON players(points DESC);
 	CREATE INDEX IF NOT EXISTS idx_chat_ts ON chat(ts);
 	CREATE INDEX IF NOT EXISTS idx_team_players_team_id ON team_players(team_id);
 	CREATE INDEX IF NOT EXISTS idx_teams_created_at ON teams(created_at);
+	CREATE INDEX IF NOT EXISTS idx_images_filename ON images(filename);
 	`
 
 	if _, err := p.db.Exec(schema); err != nil {

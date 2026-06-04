@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -700,7 +702,36 @@ func (h *APIHandlers) UploadImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create images directory if it doesn't exist
+	safeFilename := sanitizeFilename(header.Filename)
+	imageURL := "/images/" + safeFilename
+	contentType := mime.TypeByExtension(ext)
+	if contentType == "" {
+		contentType = header.Header.Get("Content-Type")
+	}
+
+	if imageStore, ok := h.dal.(dal.ImageStore); ok {
+		imageData, err := io.ReadAll(file)
+		if err != nil {
+			logger.Error("Failed to read upload contents", "error", err)
+			http.Error(w, "Failed to read file", http.StatusInternalServerError)
+			return
+		}
+
+		if err := imageStore.SaveImage(imageURL, contentType, imageData); err != nil {
+			logger.Error("Failed to store image in database", "error", err)
+			http.Error(w, "Failed to save file", http.StatusInternalServerError)
+			return
+		}
+
+		logger.Info("Image uploaded to database", "filename", safeFilename, "size", len(imageData))
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{
+			"url":      imageURL,
+			"filename": safeFilename,
+		})
+		return
+	}
+
 	imagesDir := "static/images"
 	if err := os.MkdirAll(imagesDir, 0755); err != nil {
 		logger.Error("Failed to create images directory", "error", err)
@@ -708,8 +739,6 @@ func (h *APIHandlers) UploadImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate a safe filename (use original name but sanitize it)
-	safeFilename := sanitizeFilename(header.Filename)
 	destPath := filepath.Join(imagesDir, safeFilename)
 
 	// Create destination file
@@ -730,8 +759,6 @@ func (h *APIHandlers) UploadImage(w http.ResponseWriter, r *http.Request) {
 
 	logger.Info("Image uploaded successfully", "filename", safeFilename, "size", header.Size)
 
-	// Return the URL path to the uploaded image
-	imageURL := "/static/images/" + safeFilename
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
 		"url":      imageURL,
@@ -741,6 +768,18 @@ func (h *APIHandlers) UploadImage(w http.ResponseWriter, r *http.Request) {
 
 // ListImages returns a list of all images in the static/images directory
 func (h *APIHandlers) ListImages(w http.ResponseWriter, r *http.Request) {
+	if imageStore, ok := h.dal.(dal.ImageStore); ok {
+		images, err := imageStore.ListImages()
+		if err != nil {
+			logger.Error("Failed to list database images", "error", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(images)
+		return
+	}
+
 	imagesDir := "static/images"
 
 	entries, err := os.ReadDir(imagesDir)
@@ -762,9 +801,10 @@ func (h *APIHandlers) ListImages(w http.ResponseWriter, r *http.Request) {
 		}
 		ext := strings.ToLower(filepath.Ext(entry.Name()))
 		if ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".gif" || ext == ".webp" {
-			images = append(images, "/static/images/"+entry.Name())
+			images = append(images, "/images/"+entry.Name())
 		}
 	}
+	sort.Strings(images)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(images)

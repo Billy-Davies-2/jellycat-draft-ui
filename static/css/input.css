@@ -582,9 +582,24 @@ body {
 }
 
 .room-code-panel.compact {
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr;
   padding: 0.7rem;
   box-shadow: 4px 4px 0 rgba(47, 41, 36, 0.14);
+}
+
+.room-qr {
+  width: 8.25rem;
+  height: 8.25rem;
+  justify-self: start;
+  border: 2px solid #2f2924;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 3px 3px 0 rgba(47, 41, 36, 0.22);
+}
+
+.room-qr.small {
+  width: 6.5rem;
+  height: 6.5rem;
 }
 
 .room-code-display {
@@ -629,8 +644,16 @@ body {
 
 @media (min-width: 1024px) {
   .room-code-panel {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
     padding: 1rem 1.15rem;
+  }
+
+  .room-code-panel.compact {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  .room-qr {
+    justify-self: center;
   }
 
   .room-code-display {
