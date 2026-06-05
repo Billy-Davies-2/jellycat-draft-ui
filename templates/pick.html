@@ -11,14 +11,14 @@
     <div class="max-w-6xl mx-auto relative z-10">
         <section x-show="!hasTeam()" class="phone-lobby-shell" x-cloak>
             <div class="scoreboard-panel p-5">
-                <div class="scoreboard-label">Phone Draft Lobby</div>
-                <h1 class="mt-1 text-4xl font-display font-black text-white">Join The Draft</h1>
-                <p class="mt-2 text-white/75 font-bold">Enter the room code, pick a username, and claim a team for this phone.</p>
+                <div class="scoreboard-label">Controller Pairing</div>
+                <h1 class="mt-1 text-4xl font-display font-black text-white">Pair This Phone</h1>
+                <p class="mt-2 text-white/75 font-bold">Scan the TV code or enter the 4-character room code, then claim a team for this phone.</p>
             </div>
 
             <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_24rem] gap-4">
                 <div class="card-jellycat p-5">
-                    <div class="section-kicker">Room Sign In</div>
+                    <div class="section-kicker">TV Room Code</div>
                     <form @submit.prevent="createTeam" class="mt-4 space-y-3">
                         <label for="phone-room-code" class="sr-only">Room Code</label>
                         <input id="phone-room-code" type="text" x-model="roomCode" class="input-jellycat room-code-input" placeholder="Room code" maxlength="4" autocomplete="one-time-code" required>
@@ -33,11 +33,18 @@
                             <span x-text="joiningInProgress ? 'Joining...' : 'Join Draft Room'"></span>
                         </button>
                     </form>
+                    <div class="nearby-check-panel mt-4">
+                        <div>
+                            <div class="text-xs font-black uppercase text-gray-600">Nearby Check</div>
+                            <div class="mt-1 text-sm font-bold text-gray-800">Room code required for pairing and picks.</div>
+                        </div>
+                        <span class="draft-pill bg-[#52c7bd] text-gray-900 text-xs">Same Room</span>
+                    </div>
                 </div>
 
                 <div class="card-jellycat p-5">
                     <div class="section-kicker">Existing Teams</div>
-                    <p class="mt-2 text-sm font-bold text-gray-600">Use the same code and username, then tap your team.</p>
+                    <p class="mt-2 text-sm font-bold text-gray-600">Use the TV code and username, then tap your team.</p>
                     <div class="mt-4 grid grid-cols-1 gap-3 max-h-[28rem] overflow-y-auto pr-1">
                         {{ range .Teams }}
                         <button type="button"
@@ -57,21 +64,21 @@
                 </div>
             </div>
 
-            <a href="/draft" class="btn-football w-full">View Big Board</a>
+            <a href="/draft" class="btn-football w-full">Open Room Display</a>
         </section>
 
         <section x-show="hasTeam()" class="space-y-3" x-cloak>
             <div class="broadcast-bar sticky top-0 z-40 overflow-hidden">
                 <div class="px-3 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                     <div class="min-w-0">
-                        <div class="scoreboard-label">Phone Pick View</div>
+                        <div class="scoreboard-label">Phone Controller</div>
                         <div class="font-display font-black text-white truncate">
                             <span x-text="selectedTeamName || 'Your team'"></span>
                         </div>
                     </div>
                     <div class="flex items-center gap-2">
                         <div class="draft-pill bg-yellow-300 text-gray-900 text-xs" x-text="turnStatus"></div>
-                        <button type="button" class="draft-pill bg-white text-gray-900 text-xs" @click="leaveTeam">Switch</button>
+                        <button type="button" class="draft-pill bg-white text-gray-900 text-xs" @click="leaveTeam">Unpair</button>
                     </div>
                 </div>
                 <div class="border-t border-white/15 overflow-hidden">
@@ -158,6 +165,8 @@
                                  data-player-id="{{ .ID }}"
                                  data-player-name="{{ .Name }}"
                                  data-position="{{ .Position }}"
+                                 data-base-points="{{ .Points }}"
+                                 data-base-score="{{ .Analytics.PickScore }}"
                                  @click="selectPick($el)"
                                  @keydown.enter.prevent="selectPick($el)">
                                 <div class="product-frame p-2 pt-7 mb-3">
@@ -166,24 +175,19 @@
                                 <div class="suggested-ribbon mb-2" data-suggested-ribbon {{ if not .Analytics.Suggested }}hidden{{ end }}>Suggested Pick</div>
                                 <div class="font-display font-black text-sm sm:text-base leading-tight text-gray-900">{{ .Name }}</div>
                                 <div class="mt-1 text-xs font-bold text-gray-600 truncate">{{ .Team }}</div>
+                                <div class="phone-card-scoreline mt-3">
+                                    <div class="analytics-chip">
+                                        <span>Cuddle Points</span>
+                                        <strong data-personal-points>{{ .Points }}</strong>
+                                    </div>
+                                    <div class="analytics-chip">
+                                        <span>Score</span>
+                                        <strong data-personal-score>{{ .Analytics.PickScore }}</strong>
+                                    </div>
+                                </div>
                                 <div class="mt-3 flex items-center justify-between gap-2">
                                     <span class="draft-pill text-xs">{{ .Position }}</span>
-                                    <span class="draft-pill text-xs">{{ .Analytics.PickScore }}</span>
-                                </div>
-                                <div class="mt-3 analytics-sparkline compact" aria-hidden="true">
-                                    {{ range .Analytics.Sparkline }}
-                                    <span class="analytics-bar" style="height: {{ . }}%"></span>
-                                    {{ end }}
-                                </div>
-                                <div class="mt-2 grid grid-cols-2 gap-2">
-                                    <div class="analytics-chip">
-                                        <span>Heat</span>
-                                        <strong>{{ .Analytics.CrowdHeat }}</strong>
-                                    </div>
-                                    <div class="analytics-chip">
-                                        <span>Fit</span>
-                                        <strong>{{ .Analytics.NeedFit }}</strong>
-                                    </div>
+                                    <span class="draft-pill text-xs">Personal Board</span>
                                 </div>
                                 <div class="pick-lock-panel" x-show="selectedPlayerID === '{{ .ID }}'" x-transition x-cloak @click.stop>
                                     <div class="min-w-0">
@@ -213,7 +217,7 @@
                     <div class="card-jellycat p-4">
                         <div class="section-kicker">Draft Style</div>
                         <div class="mt-3 font-display font-black text-gray-900">{{ .Settings.Name }}</div>
-                        <a href="/draft" class="btn-football w-full mt-4 text-sm">View Big Board</a>
+                        <a href="/draft" class="btn-football w-full mt-4 text-sm">Open Room Display</a>
                     </div>
                     {{ if .IsWheelMode }}
                     <div class="card-jellycat p-4">
@@ -287,6 +291,7 @@ function pickApp() {
             this.ownerName = localStorage.getItem('jellycat_owner') || '';
 
             this.$nextTick(() => {
+                this.personalizePlayerCards();
                 this.updateAvailableCount();
                 this.updateTurnBanner();
             });
@@ -404,6 +409,7 @@ function pickApp() {
             if (joinedCode) {
                 localStorage.setItem('jellycat_room_code', joinedCode);
             }
+            this.personalizePlayerCards();
             this.updateTurnBanner();
         },
 
@@ -482,7 +488,7 @@ function pickApp() {
                 const response = await fetch('/api/draft/pick', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ playerId: playerID, teamId: this.selectedTeamID })
+                    body: JSON.stringify({ code: this.roomCode, playerId: playerID, teamId: this.selectedTeamID })
                 });
 
                 if (!response.ok) {
@@ -514,6 +520,7 @@ function pickApp() {
                 this.currentRound = state.currentRound || 0;
                 this.renderTurnBanner(state.draftOrder || []);
                 this.renderSuggestedPick(state.suggestedPick || null);
+                this.personalizePlayerCards();
                 this.updateTurnBanner();
             } catch (err) {
                 console.error('Failed to refresh state:', err);
@@ -558,6 +565,41 @@ function pickApp() {
                 const ribbon = card.querySelector('[data-suggested-ribbon]');
                 if (ribbon) ribbon.hidden = !isSuggested;
             });
+        },
+
+        personalizePlayerCards() {
+            const grid = document.getElementById('pick-players-grid');
+            if (!grid || !this.hasTeam()) return;
+
+            const identity = [this.selectedTeamID, this.selectedTeamName].join('|');
+            const cards = Array.from(grid.querySelectorAll('[data-player-card]'));
+            cards.forEach((card) => {
+                const basePoints = Number(card.dataset.basePoints || 250);
+                const baseScore = Number(card.dataset.baseScore || 70);
+                const hash = this.hashString(`${identity}|${card.dataset.playerId || ''}`);
+                const personalizedPoints = Math.max(80, Math.min(500, basePoints + ((hash % 241) - 120)));
+                const personalizedScore = Math.max(1, Math.min(99, baseScore + (((hash >>> 8) % 41) - 20)));
+
+                card.dataset.userPoints = String(personalizedPoints);
+                card.dataset.userScore = String(personalizedScore);
+                const points = card.querySelector('[data-personal-points]');
+                const score = card.querySelector('[data-personal-score]');
+                if (points) points.textContent = personalizedPoints;
+                if (score) score.textContent = personalizedScore;
+            });
+
+            cards
+                .sort((left, right) => Number(right.dataset.userPoints || 0) - Number(left.dataset.userPoints || 0))
+                .forEach((card) => grid.appendChild(card));
+        },
+
+        hashString(value) {
+            let hash = 2166136261;
+            for (let index = 0; index < value.length; index++) {
+                hash ^= value.charCodeAt(index);
+                hash = Math.imul(hash, 16777619);
+            }
+            return hash >>> 0;
         },
 
         renderTurnBanner(draftOrder) {

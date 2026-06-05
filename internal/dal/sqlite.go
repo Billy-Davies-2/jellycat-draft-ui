@@ -124,13 +124,13 @@ func (s *SQLiteDAL) initSchema() error {
 		}
 	}
 
-	// Seed default data if empty
+	// Seed default data if empty and demo catalog seeding is enabled.
 	var count int
 	if err := s.db.QueryRow("SELECT COUNT(*) FROM players").Scan(&count); err != nil {
 		return err
 	}
 
-	if count == 0 {
+	if count == 0 && SeedDefaultCatalogEnabled() {
 		if err := s.seedData(); err != nil {
 			return err
 		}
@@ -175,6 +175,10 @@ func (s *SQLiteDAL) getDraftModeTx(tx *sql.Tx) (models.DraftMode, error) {
 }
 
 func (s *SQLiteDAL) seedData() error {
+	if !SeedDefaultCatalogEnabled() {
+		return s.ensureDefaultDraftSettings()
+	}
+
 	players := getDefaultPlayers()
 
 	// Insert players
@@ -202,10 +206,9 @@ func (s *SQLiteDAL) seedData() error {
 		}
 	}
 
-	// Add welcome messages
-	s.AddChatMessage("Welcome to the Jellycat Draft! 🎉", "system")
-	s.AddChatMessage("Tip: Click a Jellycat card to draft it!", "system")
-	s.AddChatMessage("Who will snag Bashful Bunny first? 🐰", "system")
+	s.AddChatMessage("Welcome to the Jellycat Draft!", "system")
+	s.AddChatMessage("Tip: pair your phone with the TV room code before picking.", "system")
+	s.AddChatMessage("Who will snag Bashful Bunny first?", "system")
 
 	if err := s.ensureDefaultDraftSettings(); err != nil {
 		return err
@@ -592,6 +595,8 @@ func (s *SQLiteDAL) DraftPlayer(playerID, teamID string) error {
 		return err
 	}
 
+	p = personalizePlayerForTeam(p, models.Team{ID: teamID, Name: teamName})
+
 	// Calculate cuddle points adjustment based on draft position
 	// Early picks (1-6) gain points, late picks (13-18) lose points
 	cuddlePointsAdjustment := 0
@@ -614,8 +619,8 @@ func (s *SQLiteDAL) DraftPlayer(playerID, teamID string) error {
 
 	// Update player as drafted with adjusted cuddle points
 	_, err = tx.Exec(`
-		UPDATE players SET drafted = 1, drafted_by = ?, cuddle_points = ? WHERE id = ?
-	`, teamName, newCuddlePoints, playerID)
+		UPDATE players SET drafted = 1, drafted_by = ?, points = ?, cuddle_points = ? WHERE id = ?
+	`, teamName, p.Points, newCuddlePoints, playerID)
 	if err != nil {
 		return err
 	}

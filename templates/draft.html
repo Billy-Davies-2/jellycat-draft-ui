@@ -5,10 +5,10 @@
         <div class="container mx-auto px-4 py-4">
             <div class="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
                 <div>
-                    <div class="scoreboard-label">Jellycat Draft Day</div>
-                    <h1 class="text-3xl md:text-4xl font-display font-black text-white">Live Big Board</h1>
+                    <div class="scoreboard-label">TV Big Board</div>
+                    <h1 class="text-3xl md:text-4xl font-display font-black text-white">Room Display</h1>
                 </div>
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-3 xl:w-[56rem]">
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-3 xl:w-[66rem]">
                     <div class="rounded-lg border-2 border-white/30 bg-white/10 px-4 py-3">
                         <div class="text-xs font-black text-yellow-300 uppercase">On The Clock</div>
                         <div class="font-display font-black text-white truncate" id="pick-counter">
@@ -23,7 +23,8 @@
                         <option value="HH">HH - Hug Hero</option>
                         <option value="DD">DD - Dream Defender</option>
                     </select>
-                    <a href="{{ .JoinPath }}" class="btn-jellycat text-sm">Join Room</a>
+                    <a href="{{ .JoinPath }}" class="btn-jellycat text-sm">Pair Phone</a>
+                    <button type="button" onclick="requestRoomDisplayFullscreen()" class="btn-football text-sm">Fullscreen</button>
                 </div>
             </div>
         </div>
@@ -35,24 +36,28 @@
                 <span class="ticker-item">ROUND {{ .CurrentRound }}</span>
                 <span class="ticker-item">PICK {{ .CurrentPick }}</span>
                 <span class="ticker-item">{{ .Settings.Name }}</span>
-                <span class="ticker-item">ROOM {{ .RoomCode }}</span>
+                <span class="ticker-item">TV ROOM {{ .RoomCode }}</span>
                 <span class="ticker-item">AVAILABLE <span id="available-count-ticker-2"></span></span>
                 <span class="ticker-item">ROUND {{ .CurrentRound }}</span>
                 <span class="ticker-item">PICK {{ .CurrentPick }}</span>
                 <span class="ticker-item">{{ .Settings.Name }}</span>
-                <span class="ticker-item">ROOM {{ .RoomCode }}</span>
+                <span class="ticker-item">TV ROOM {{ .RoomCode }}</span>
                 <span class="ticker-item">AVAILABLE <span id="available-count-ticker"></span></span>
             </div>
         </div>
 
-        <div class="room-code-panel mb-8">
+        <div class="room-code-panel room-display-pairing mb-8">
             <div>
-                <div class="scoreboard-label text-gray-700">Join From Phone</div>
+                <div class="scoreboard-label text-gray-700">Controller Pairing</div>
                 <div class="room-url mt-2">{{ .JoinURL }}</div>
+                <div class="mt-3 flex flex-wrap gap-2">
+                    <span class="draft-pill bg-[#52c7bd] text-gray-900 text-xs">Phone Controllers</span>
+                    <span class="draft-pill bg-[#f6d46b] text-gray-900 text-xs">Live TV Code</span>
+                </div>
             </div>
             <img src="{{ .JoinQRPath }}" alt="QR code for joining this draft room" class="room-qr" width="132" height="132">
             <div class="text-left lg:text-right">
-                <div class="text-xs font-black uppercase text-gray-600">Room Code</div>
+                <div class="text-xs font-black uppercase text-gray-600">Pair Code</div>
                 <div class="room-code-display">{{ .RoomCode }}</div>
             </div>
         </div>
@@ -62,13 +67,13 @@
                 <button onclick="showTab('draft')" id="tab-draft" class="tab-jellycat active flex-1 px-6 py-4">
                     <span class="inline-flex items-center gap-2 font-display font-black">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
-                        Big Board
+                        Display Board
                     </span>
                 </button>
                 <button onclick="showTab('teams')" id="tab-teams" class="tab-jellycat flex-1 px-6 py-4 border-l-2 border-gray-900">
                     <span class="inline-flex items-center gap-2 font-display font-black">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path></svg>
-                        War Rooms
+                        Team Rooms
                     </span>
                 </button>
                 <button onclick="showTab('chat')" id="tab-chat" class="tab-jellycat flex-1 px-6 py-4 border-l-2 border-gray-900">
@@ -120,9 +125,9 @@
                     <button type="submit" class="btn-jellycat w-full text-sm">Set Draft Style</button>
                 </form>
                 {{ else }}
-                <div class="section-kicker">Drafters</div>
-                <div class="mt-3 text-2xl font-display font-black text-gray-900">Use Your Phone</div>
-                <a href="{{ .JoinPath }}" class="btn-jellycat w-full mt-4 text-sm">Open Room Join</a>
+                <div class="section-kicker">Controllers</div>
+                <div class="mt-3 text-2xl font-display font-black text-gray-900">Phones Make Picks</div>
+                <a href="{{ .JoinPath }}" class="btn-jellycat w-full mt-4 text-sm">Pair Phone</a>
                 {{ end }}
             </div>
         </div>
@@ -286,7 +291,7 @@
                                 </div>
                                 <div class="font-display font-black text-gray-900">Select a prospect</div>
                                 <div class="mt-2 text-sm font-bold text-gray-600">This board is display-only. Drafters pick from phones.</div>
-                                <a href="{{ .JoinPath }}" class="btn-jellycat mt-5 w-full text-sm">Open Room Join</a>
+                                <a href="{{ .JoinPath }}" class="btn-jellycat mt-5 w-full text-sm">Pair Phone</a>
                             </div>
                         </div>
                     </div>
@@ -415,6 +420,13 @@ let selectedPlayer = null;
 let currentTeamIndex = 0;
 let currentTeamID = "{{ .CurrentTeamID }}";
 const teams = {{ len .Teams }};
+
+function requestRoomDisplayFullscreen() {
+    const root = document.documentElement;
+    if (root.requestFullscreen) {
+        root.requestFullscreen().catch(() => {});
+    }
+}
 
 function showTab(tab) {
     // Hide all tab contents

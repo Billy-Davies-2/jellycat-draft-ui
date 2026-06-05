@@ -163,13 +163,13 @@ func (p *PostgresDAL) initSchema() error {
 		return fmt.Errorf("failed to add draft_pick_number column: %w", err)
 	}
 
-	// Check if we need to seed data
+	// Seed default data if empty and demo catalog seeding is enabled.
 	var count int
 	if err := p.db.QueryRow("SELECT COUNT(*) FROM players").Scan(&count); err != nil {
 		return err
 	}
 
-	if count == 0 {
+	if count == 0 && SeedDefaultCatalogEnabled() {
 		if err := p.seedData(); err != nil {
 			return err
 		}
@@ -215,6 +215,10 @@ func (p *PostgresDAL) getDraftModeTx(ctx context.Context, tx *sql.Tx) (models.Dr
 }
 
 func (p *PostgresDAL) seedData() error {
+	if !SeedDefaultCatalogEnabled() {
+		return p.ensureDefaultDraftSettings()
+	}
+
 	// CloudNativePG optimization: Use a transaction for batch inserts
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -229,8 +233,8 @@ func (p *PostgresDAL) seedData() error {
 
 	// CloudNativePG optimization: Batch insert players to reduce round trips
 	playerStmt, err := tx.PrepareContext(ctx, `
-		INSERT INTO players (id, name, position, team, points, tier, drafted, drafted_by, image)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO players (id, name, position, team, points, cuddle_points, tier, drafted, drafted_by, image)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 	`)
 	if err != nil {
 		return err
@@ -238,10 +242,7 @@ func (p *PostgresDAL) seedData() error {
 	defer playerStmt.Close()
 
 	for _, player := range players {
-		_, err := p.db.Exec(`
-			INSERT INTO players (id, name, position, team, points, cuddle_points, tier, drafted, drafted_by, image)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-		`, player.ID, player.Name, player.Position, player.Team, player.Points, player.CuddlePoints, player.Tier, player.Drafted, "", player.Image)
+		_, err := playerStmt.ExecContext(ctx, player.ID, player.Name, player.Position, player.Team, player.Points, player.CuddlePoints, player.Tier, player.Drafted, "", player.Image)
 		if err != nil {
 			return err
 		}
@@ -280,10 +281,9 @@ func (p *PostgresDAL) seedData() error {
 		fmt.Printf("Warning: Failed to migrate images to database: %v\n", err)
 	}
 
-	// Add welcome messages
-	p.AddChatMessage("Welcome to the Jellycat Draft! 🎉", "system")
-	p.AddChatMessage("Tip: Click a Jellycat card to draft it!", "system")
-	p.AddChatMessage("Who will snag Bashful Bunny first? 🐰", "system")
+	p.AddChatMessage("Welcome to the Jellycat Draft!", "system")
+	p.AddChatMessage("Tip: pair your phone with the TV room code before picking.", "system")
+	p.AddChatMessage("Who will snag Bashful Bunny first?", "system")
 
 	if err := p.ensureDefaultDraftSettings(); err != nil {
 		return err
@@ -630,6 +630,8 @@ func (p *PostgresDAL) DraftPlayer(playerID, teamID string) error {
 		return err
 	}
 
+	player = personalizePlayerForTeam(player, models.Team{ID: teamID, Name: teamName})
+
 	// Calculate cuddle points adjustment based on draft position
 	// Early picks (1-6) gain points, late picks (13-18) lose points
 	cuddlePointsAdjustment := 0
@@ -653,9 +655,9 @@ func (p *PostgresDAL) DraftPlayer(playerID, teamID string) error {
 	// Update player as drafted with adjusted cuddle points
 	_, err = tx.Exec(`
 		UPDATE players
-		SET drafted = true, drafted_by = $1, cuddle_points = $2, updated_at = CURRENT_TIMESTAMP
-		WHERE id = $3
-	`, teamName, newCuddlePoints, playerID)
+		SET drafted = true, drafted_by = $1, points = $2, cuddle_points = $3, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $4
+	`, teamName, player.Points, newCuddlePoints, playerID)
 	if err != nil {
 		return err
 	}

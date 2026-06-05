@@ -43,11 +43,13 @@ func TestMemoryDALDraftCuddlePointsAdjustment(t *testing.T) {
 	}
 
 	// Now draft all players in sequence
+	draftingTeams := map[string]models.Team{}
 	for i, playerID := range playerIDs {
 		state, err = dal.GetState()
 		if err != nil {
 			t.Fatalf("GetState() failed before pick %d: %v", i+1, err)
 		}
+		draftingTeams[playerID] = models.Team{ID: state.CurrentTeamID, Name: state.CurrentTeamName}
 
 		err = dal.DraftPlayer(playerID, state.CurrentTeamID)
 		if err != nil {
@@ -82,13 +84,9 @@ func TestMemoryDALDraftCuddlePointsAdjustment(t *testing.T) {
 		for _, p := range state.Players {
 			if p.ID == tc.playerID && p.Drafted {
 				found = true
-				expectedCuddle := initialCuddle + tc.expectedAdjust
-				if expectedCuddle < 10 {
-					expectedCuddle = 10
-				}
-				if expectedCuddle > 100 {
-					expectedCuddle = 100
-				}
+				basePlayer := models.Player{ID: tc.playerID, Points: 100, CuddlePoints: initialCuddle}
+				personalizedPlayer := personalizePlayerForTeam(basePlayer, draftingTeams[tc.playerID])
+				expectedCuddle := clampInt(personalizedPlayer.CuddlePoints+tc.expectedAdjust, 10, 100)
 
 				if p.CuddlePoints != expectedCuddle {
 					t.Errorf("%s: pick #%d expected cuddle_points=%d, got %d",
@@ -129,6 +127,8 @@ func TestMemoryDALEarlyPicksBonusCuddlePoints(t *testing.T) {
 	}
 
 	// Draft as first overall pick
+	personalizedPlayer := personalizePlayerForTeam(*addedPlayer, state.Teams[0])
+	expectedCuddle := clampInt(personalizedPlayer.CuddlePoints+18, 10, 100)
 	err = dal.DraftPlayer(addedPlayer.ID, state.Teams[0].ID)
 	if err != nil {
 		t.Fatalf("DraftPlayer() failed: %v", err)
@@ -140,12 +140,8 @@ func TestMemoryDALEarlyPicksBonusCuddlePoints(t *testing.T) {
 	// Find the player and verify cuddle points increased
 	for _, p := range state.Players {
 		if p.ID == addedPlayer.ID {
-			if p.CuddlePoints <= 50 {
-				t.Errorf("First overall pick should have increased cuddle points, got %d", p.CuddlePoints)
-			}
-			// First pick should get +18 bonus (50 + 18 = 68)
-			if p.CuddlePoints != 68 {
-				t.Errorf("First overall pick should have 68 cuddle points, got %d", p.CuddlePoints)
+			if p.CuddlePoints != expectedCuddle {
+				t.Errorf("First overall pick should have personalized cuddle points plus 18, expected %d, got %d", expectedCuddle, p.CuddlePoints)
 			}
 			break
 		}
@@ -208,6 +204,8 @@ func TestMemoryDALLatePicksLoseCuddlePoints(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetState() failed before late pick: %v", err)
 	}
+	personalizedPlayer := personalizePlayerForTeam(*addedPlayer, models.Team{ID: state.CurrentTeamID, Name: state.CurrentTeamName})
+	expectedCuddle := clampInt(personalizedPlayer.CuddlePoints-10, 10, 100)
 	err = dal.DraftPlayer(addedPlayer.ID, state.CurrentTeamID)
 	if err != nil {
 		t.Fatalf("DraftPlayer() failed: %v", err)
@@ -219,12 +217,8 @@ func TestMemoryDALLatePicksLoseCuddlePoints(t *testing.T) {
 	// Find the player and verify cuddle points decreased
 	for _, p := range state.Players {
 		if p.ID == addedPlayer.ID {
-			if p.CuddlePoints >= 50 {
-				t.Errorf("18th overall pick should have decreased cuddle points, got %d", p.CuddlePoints)
-			}
-			// 18th pick should get -10 penalty (50 - 10 = 40)
-			if p.CuddlePoints != 40 {
-				t.Errorf("18th overall pick should have 40 cuddle points, got %d", p.CuddlePoints)
+			if p.CuddlePoints != expectedCuddle {
+				t.Errorf("18th overall pick should have personalized cuddle points minus 10, expected %d, got %d", expectedCuddle, p.CuddlePoints)
 			}
 			break
 		}

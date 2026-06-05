@@ -1,14 +1,17 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"html/template"
+	"io"
 	"log"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/auth"
@@ -272,7 +275,7 @@ func main() {
 
 	// Draft API
 	mux.HandleFunc("/api/draft/state", api.GetDraftState)
-	mux.HandleFunc("/api/draft/pick", api.DraftPick)
+	mux.HandleFunc("/api/draft/pick", requireRoomCode(api.DraftPick))
 	mux.HandleFunc("/api/draft/reset", authProvider.Middleware(requireAdmin(api.ResetDraft)))
 	mux.HandleFunc("/api/draft/settings", authProvider.Middleware(requireAdmin(api.UpdateDraftSettings)))
 	mux.HandleFunc("/api/room", roomInfoHandler)
@@ -330,6 +333,43 @@ func requireAdmin(next http.HandlerFunc) http.HandlerFunc {
 			http.Error(w, "Forbidden: Admin access required", http.StatusForbidden)
 			return
 		}
+		next.ServeHTTP(w, r)
+	}
+}
+
+func requireRoomCode(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		code := r.Header.Get("X-Jellycat-Room-Code")
+		if code == "" && strings.Contains(r.Header.Get("Content-Type"), "application/json") {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				http.Error(w, "Failed to read request", http.StatusBadRequest)
+				return
+			}
+			r.Body = io.NopCloser(bytes.NewReader(body))
+
+			var payload struct {
+				Code     string `json:"code"`
+				RoomCode string `json:"roomCode"`
+			}
+			if err := json.Unmarshal(body, &payload); err == nil {
+				code = payload.Code
+				if code == "" {
+					code = payload.RoomCode
+				}
+			}
+		}
+
+		if !draftRoom.Matches(code) {
+			http.Error(w, "Invalid room code", http.StatusUnauthorized)
+			return
+		}
+
 		next.ServeHTTP(w, r)
 	}
 }

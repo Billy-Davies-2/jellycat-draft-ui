@@ -3,11 +3,13 @@
     <div class="max-w-7xl mx-auto space-y-6 relative z-10">
         <div class="broadcast-bar overflow-hidden">
             <div class="ticker-track">
-                <span class="ticker-item">LIVE BIG BOARD</span>
+                <span class="ticker-item">ROOM DISPLAY</span>
+                <span class="ticker-item">PHONE CONTROLLERS</span>
                 <span class="ticker-item">PLUSH PROSPECTS REPORTING</span>
                 <span class="ticker-item">{{ .Settings.Name }} FORMAT</span>
                 <span class="ticker-item">ROOM {{ .RoomCode }}</span>
-                <span class="ticker-item">LIVE BIG BOARD</span>
+                <span class="ticker-item">ROOM DISPLAY</span>
+                <span class="ticker-item">PHONE CONTROLLERS</span>
                 <span class="ticker-item">PLUSH PROSPECTS REPORTING</span>
                 <span class="ticker-item">{{ .Settings.Name }} FORMAT</span>
                 <span class="ticker-item">ROOM {{ .RoomCode }}</span>
@@ -23,7 +25,7 @@
                             Jellycat Fantasy Draft
                         </h1>
                         <p class="mt-5 max-w-2xl text-xl md:text-2xl font-bold text-white/95">
-                            Joy is on the clock. Build a plush roster, chase the perfect pick, and make the room louder every round.
+                            Cast the room display, pair the phones, and let every pick land with a little plush-league drama.
                         </p>
                     </div>
 
@@ -51,30 +53,25 @@
                     </div>
 
                     <div class="card-jellycat p-5 lg:p-6">
-                        <div class="section-kicker mb-4">Join The League</div>
+                        <div class="section-kicker mb-4">Room Pairing</div>
                         <div class="room-code-panel compact mb-4">
                             <div>
-                                <div class="text-xs font-black uppercase text-gray-600">Phone Room</div>
+                                <div class="text-xs font-black uppercase text-gray-600">Phone Controllers</div>
                                 <div class="room-url mt-1">{{ .JoinURL }}</div>
                             </div>
                             <img src="{{ .JoinQRPath }}" alt="QR code for joining this draft room" class="room-qr small" width="104" height="104">
                             <div class="room-code-display small">{{ .RoomCode }}</div>
                         </div>
-                        <form hx-post="/api/teams/add" hx-target="#team-created" hx-swap="innerHTML" class="space-y-4">
+                        <div class="nearby-check-panel mb-4">
                             <div>
-                                <label for="name" class="block text-sm font-black text-gray-900 mb-2 font-display">Team Name</label>
-                                <input type="text" id="name" name="name" required class="input-jellycat" placeholder="Snuggle Blitz">
+                                <div class="text-xs font-black uppercase text-gray-600">Nearby Check</div>
+                                <div class="mt-1 text-sm font-bold text-gray-800">Pairing and picks require the live TV code.</div>
                             </div>
-                            <div>
-                                <label for="owner" class="block text-sm font-black text-gray-900 mb-2 font-display">Team Owner</label>
-                                <input type="text" id="owner" name="owner" class="input-jellycat" placeholder="Your name">
-                            </div>
-                            <button type="submit" class="btn-jellycat w-full text-lg">Create Team</button>
-                        </form>
-                        <div id="team-created" class="mt-4"></div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
-                            <a href="{{ .JoinPath }}" class="btn-jellycat w-full text-lg">Join On Phone</a>
-                            <a href="/draft" class="btn-football w-full text-lg">Open Big Board</a>
+                            <span class="draft-pill bg-[#52c7bd] text-gray-900 text-xs">4 Characters</span>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <a href="{{ .JoinPath }}" class="btn-jellycat w-full text-lg">Pair Phone</a>
+                            <a href="/draft" class="btn-football w-full text-lg">Open Room Display</a>
                         </div>
                     </div>
                 </div>
@@ -98,8 +95,8 @@
                     <h2 class="mt-3 text-3xl font-display font-black text-gray-900">Current Teams</h2>
                 </div>
                 <div class="flex flex-col sm:flex-row gap-3">
-                    <a href="{{ .JoinPath }}" class="btn-jellycat">Join On Phone</a>
-                    <a href="/draft" class="btn-football">Open Big Board</a>
+                    <a href="{{ .JoinPath }}" class="btn-jellycat">Pair Phone</a>
+                    <a href="/draft" class="btn-football">Open Room Display</a>
                 </div>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -117,26 +114,4 @@
     </div>
 </div>
 
-<script>
-    // After creating team, redirect to draft
-    document.body.addEventListener('htmx:afterSwap', function(evt) {
-        if (evt.detail.target.id === 'team-created') {
-            const response = JSON.parse(evt.detail.xhr.response);
-            if (response && response.id) {
-                // Store owner in localStorage (sanitized)
-                const owner = document.getElementById('owner').value;
-                if (owner) {
-                    // Basic sanitization - remove any HTML tags and limit length
-                    const sanitized = owner.replace(/<[^>]*>/g, '').substring(0, 100);
-                    localStorage.setItem('jellycat_owner', sanitized);
-                }
-                localStorage.setItem('jellycat_team_id', response.id);
-                localStorage.setItem('jellycat_team_name', response.name);
-                localStorage.setItem('jellycat_room_code', '{{ .RoomCode }}');
-                // Small delay before redirect
-                setTimeout(() => window.location.href = '/pick', 100);
-            }
-        }
-    });
-</script>
 {{ end }}

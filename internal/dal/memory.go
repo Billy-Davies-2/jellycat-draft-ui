@@ -29,6 +29,11 @@ type MemoryDAL struct {
 
 // NewMemoryDAL creates a new in-memory data access layer
 func NewMemoryDAL() *MemoryDAL {
+	players := []models.Player{}
+	if SeedDefaultCatalogEnabled() {
+		players = getDefaultPlayers()
+	}
+
 	var teams []models.Team
 	if IsDevEnvironment() {
 		teams = getDefaultTeams()
@@ -37,17 +42,18 @@ func NewMemoryDAL() *MemoryDAL {
 	}
 
 	dal := &MemoryDAL{
-		players:       getDefaultPlayers(),
+		players:       players,
 		teams:         teams,
 		chat:          []models.ChatMessage{},
 		settings:      models.DefaultDraftSettings(),
 		reactionUsers: make(map[string]map[string]map[string]bool),
 	}
 
-	// Add welcome messages
-	dal.AddChatMessage("Welcome to the Jellycat Draft! 🎉", "system")
-	dal.AddChatMessage("Tip: Click a Jellycat card to draft it!", "system")
-	dal.AddChatMessage("Who will snag Bashful Bunny first? 🐰", "system")
+	if SeedDefaultCatalogEnabled() {
+		dal.AddChatMessage("Welcome to the Jellycat Draft!", "system")
+		dal.AddChatMessage("Tip: pair your phone with the TV room code before picking.", "system")
+		dal.AddChatMessage("Who will snag Bashful Bunny first?", "system")
+	}
 
 	return dal
 }
@@ -85,7 +91,10 @@ func (m *MemoryDAL) Reset() error {
 		teams = []models.Team{}
 	}
 
-	m.players = getDefaultPlayers()
+	m.players = []models.Player{}
+	if SeedDefaultCatalogEnabled() {
+		m.players = getDefaultPlayers()
+	}
 	m.teams = teams
 	m.chat = []models.ChatMessage{}
 	m.settings = models.DefaultDraftSettings()
@@ -273,6 +282,10 @@ func (m *MemoryDAL) DraftPlayer(playerID, teamID string) error {
 	if err := validateTeamTurn(m.teams, m.settings.Mode, m.players, teamID); err != nil {
 		return err
 	}
+
+	personalizedPlayer := personalizePlayerForTeam(*player, *team)
+	player.Points = personalizedPlayer.Points
+	player.CuddlePoints = personalizedPlayer.CuddlePoints
 
 	// Calculate current draft pick number
 	draftPickNumber := 0
