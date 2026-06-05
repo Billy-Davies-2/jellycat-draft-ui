@@ -84,10 +84,13 @@ func TestBuildFeaturedProspectsSpreadsCategories(t *testing.T) {
 	}
 
 	categories := map[string]bool{}
-	for _, prospect := range prospects {
+	for index, prospect := range prospects {
 		categories[prospect.Category] = true
-		if prospect.Image == "" || prospect.Name == "" || prospect.Label == "" || prospect.FrameClass == "" {
+		if prospect.Image == "" || prospect.Name == "" || prospect.Label == "" {
 			t.Fatalf("featured prospect missing display fields: %+v", prospect)
+		}
+		if prospect.FrameIndex != index {
+			t.Fatalf("featured prospect frame index = %d, want %d", prospect.FrameIndex, index)
 		}
 	}
 

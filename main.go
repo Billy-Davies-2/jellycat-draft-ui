@@ -49,12 +49,10 @@ type featuredProspect struct {
 	Image      string
 	Category   string
 	Label      string
-	FrameClass string
+	FrameIndex int
 }
 
-var featuredProspectLabels = []string{"Board Buzz", "Sleeper Pick", "Fan Favorite"}
-
-var featuredProspectFrames = []string{"rotate-[-2deg]", "translate-y-6 rotate-[2deg]", "rotate-[-1deg]"}
+var featuredProspectLabels = []string{"No. 1 Board Buzz", "Sleeper Pick", "Fan Favorite"}
 
 func main() {
 	// Initialize logger first
@@ -556,7 +554,7 @@ func buildFeaturedProspects(players []models.Player, seed string) []featuredPros
 			Image:      image,
 			Category:   playerCategory(player),
 			Label:      featuredProspectLabels[index%len(featuredProspectLabels)],
-			FrameClass: featuredProspectFrames[index%len(featuredProspectFrames)],
+			FrameIndex: index % len(featuredProspectLabels),
 		})
 	}
 

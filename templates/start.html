@@ -31,10 +31,11 @@
 
                     <div class="mt-8 grid grid-cols-3 gap-3 max-w-2xl">
                         {{ range .FeaturedProspects }}
-                        <div class="product-frame bg-white p-2 shadow-soft-lg {{ .FrameClass }}">
+                        <div class="product-frame bg-white p-2 shadow-soft-lg {{ if eq .FrameIndex 0 }}rotate-[-2deg]{{ else if eq .FrameIndex 1 }}translate-y-6 rotate-[2deg]{{ else }}rotate-[-1deg]{{ end }}">
                             <img src="{{ .Image }}" alt="{{ .Name }}" class="w-full aspect-square object-contain rounded-lg bg-white" onerror="this.src='/images/placeholder.png'">
-                            <div class="mt-2 text-center text-xs font-black text-gray-900 truncate">{{ .Label }}</div>
-                            <div class="mt-1 text-center text-[0.65rem] font-bold text-gray-700 truncate">{{ .Name }}</div>
+                            <div class="mt-2 text-center text-xs font-black leading-tight text-gray-900">{{ .Label }}</div>
+                            <div class="mt-1 text-center text-[0.65rem] font-black uppercase tracking-normal text-[#176f51] truncate">{{ .Category }}</div>
+                            <div class="mt-1 text-center text-[0.68rem] font-bold text-gray-700 truncate">{{ .Name }}</div>
                         </div>
                         {{ end }}
                     </div>
