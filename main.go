@@ -272,32 +272,35 @@ func main() {
 
 	// API routes
 	api := handlers.NewAPIHandlers(dataStore, convertPubSub(ps))
+	adminAPI := func(next http.HandlerFunc) http.HandlerFunc {
+		return authProvider.OptionalMiddleware(requireAdminAPI(next))
+	}
 
 	// Draft API
 	mux.HandleFunc("/api/draft/state", api.GetDraftState)
 	mux.HandleFunc("/api/draft/pick", requireRoomCode(api.DraftPick))
-	mux.HandleFunc("/api/draft/reset", authProvider.Middleware(requireAdmin(api.ResetDraft)))
-	mux.HandleFunc("/api/draft/settings", authProvider.Middleware(requireAdmin(api.UpdateDraftSettings)))
+	mux.HandleFunc("/api/draft/reset", adminAPI(api.ResetDraft))
+	mux.HandleFunc("/api/draft/settings", adminAPI(api.UpdateDraftSettings))
 	mux.HandleFunc("/api/room", roomInfoHandler)
 	mux.HandleFunc("/api/room/qr", roomQRHandler)
 	mux.HandleFunc("/api/room/join", roomJoinHandler)
 
 	// Teams API
 	mux.HandleFunc("/api/teams", api.ListTeams)
-	mux.HandleFunc("/api/teams/add", authProvider.Middleware(api.AddTeam))
-	mux.HandleFunc("/api/teams/update", api.UpdateTeam)
-	mux.HandleFunc("/api/teams/delete", api.DeleteTeam)
-	mux.HandleFunc("/api/teams/reorder", api.ReorderTeams)
+	mux.HandleFunc("/api/teams/add", adminAPI(api.AddTeam))
+	mux.HandleFunc("/api/teams/update", adminAPI(api.UpdateTeam))
+	mux.HandleFunc("/api/teams/delete", adminAPI(api.DeleteTeam))
+	mux.HandleFunc("/api/teams/reorder", adminAPI(api.ReorderTeams))
 
 	// Players API
-	mux.HandleFunc("/api/players/add", api.AddPlayer)
-	mux.HandleFunc("/api/players/update", api.UpdatePlayer)
-	mux.HandleFunc("/api/players/delete", api.DeletePlayer)
-	mux.HandleFunc("/api/players/points", api.SetPlayerPoints)
+	mux.HandleFunc("/api/players/add", adminAPI(api.AddPlayer))
+	mux.HandleFunc("/api/players/update", adminAPI(api.UpdatePlayer))
+	mux.HandleFunc("/api/players/delete", adminAPI(api.DeletePlayer))
+	mux.HandleFunc("/api/players/points", adminAPI(api.SetPlayerPoints))
 	mux.HandleFunc("/api/players/profile", api.GetPlayerProfile)
 
 	// Image upload API
-	mux.HandleFunc("/api/images/upload", api.UploadImage)
+	mux.HandleFunc("/api/images/upload", adminAPI(api.UploadImage))
 	mux.HandleFunc("/api/images/list", api.ListImages)
 
 	// Chat API
@@ -327,12 +330,18 @@ func main() {
 	}
 }
 
-func requireAdmin(next http.HandlerFunc) http.HandlerFunc {
+func requireAdminAPI(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !auth.IsAdmin(auth.GetUser(r)) {
+		user := auth.GetUser(r)
+		if user == nil {
+			http.Error(w, "Unauthorized: login required", http.StatusUnauthorized)
+			return
+		}
+		if !auth.IsAdmin(user) {
 			http.Error(w, "Forbidden: Admin access required", http.StatusForbidden)
 			return
 		}
+
 		next.ServeHTTP(w, r)
 	}
 }

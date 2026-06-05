@@ -165,7 +165,7 @@
                                  data-player-id="{{ .ID }}"
                                  data-player-name="{{ .Name }}"
                                  data-position="{{ .Position }}"
-                                 data-base-points="{{ .Points }}"
+                                 data-base-points="{{ .CuddlePoints }}"
                                  data-base-score="{{ .Analytics.PickScore }}"
                                  @click="selectPick($el)"
                                  @keydown.enter.prevent="selectPick($el)">
@@ -178,7 +178,7 @@
                                 <div class="phone-card-scoreline mt-3">
                                     <div class="analytics-chip">
                                         <span>Cuddle Points</span>
-                                        <strong data-personal-points>{{ .Points }}</strong>
+                                        <strong data-personal-points>{{ .CuddlePoints }}</strong>
                                     </div>
                                     <div class="analytics-chip">
                                         <span>Score</span>

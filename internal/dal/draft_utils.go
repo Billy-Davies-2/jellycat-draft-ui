@@ -149,9 +149,14 @@ func buildPlayerAnalytics(player models.Player, mode models.DraftMode, currentRo
 	}
 
 	seed := metricSeed(player.ID, player.Name, player.Position, player.Team, mode, totalDrafted)
-	valueScore := clampInt((player.Points/4)+tierBoost(player.Tier)+(seed%13)-6, 35, 99)
-	crowdHeat := clampInt((player.CuddlePoints*2/3)+38+((seed/7)%24)-12, 30, 99)
-	needFit := needFitScore(player.Position, positionCounts, hasCurrentTeam)
+	cuddleGrade := player.CuddlePoints
+	if cuddleGrade == 0 && player.Points > 0 {
+		cuddleGrade = clampInt(player.Points/4, 0, 100)
+	}
+
+	valueScore := clampInt((cuddleGrade*3/4)+(tierBoost(player.Tier)/2)+(seed%21)-10, 35, 99)
+	crowdHeat := clampInt((cuddleGrade*2/3)+38+((seed/7)%24)-12, 30, 99)
+	needFit := needFitScore(player.Position, positionCounts, hasCurrentTeam, seed)
 	trendDelta := clampInt(((seed/13)%27)-8+tierTrend(player.Tier)+(currentRound-1), -9, 24)
 	modeBoost := modeIntelBoost(mode, player, seed)
 	pickScore := clampInt(((valueScore*4)+(crowdHeat*2)+(needFit*3)+((trendDelta+10)*2)+modeBoost)/11, 1, 99)
@@ -205,19 +210,21 @@ func tierTrend(tier models.Tier) int {
 	}
 }
 
-func needFitScore(position string, positionCounts map[string]int, hasCurrentTeam bool) int {
+func needFitScore(position string, positionCounts map[string]int, hasCurrentTeam bool, seed int) int {
+	variance := ((seed / 17) % 17) - 8
 	if !hasCurrentTeam {
-		return 64
+		return clampInt(64+(((seed/17)%31)-15), 49, 79)
 	}
 
+	baseScore := 44
 	switch positionCounts[position] {
 	case 0:
-		return 94
+		baseScore = 94
 	case 1:
-		return 70
-	default:
-		return 44
+		baseScore = 70
 	}
+
+	return clampInt(baseScore+variance, 35, 99)
 }
 
 func modeIntelBoost(mode models.DraftMode, player models.Player, seed int) int {

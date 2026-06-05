@@ -195,7 +195,7 @@
                                      data-player-name="{{ .Name }}"
                                      data-player-image="{{ .Image }}"
                                      data-player-team="{{ .Team }}"
-                                     data-player-points="{{ .Points }}"
+                                     data-player-points="{{ .CuddlePoints }}"
                                      data-pick-score="{{ .Analytics.PickScore }}"
                                      data-value-score="{{ .Analytics.ValueScore }}"
                                      data-crowd-heat="{{ .Analytics.CrowdHeat }}"
@@ -221,7 +221,7 @@
                                     <div class="mt-4 flex items-center justify-between border-t-2 border-gray-900 pt-3">
                                         <div>
                                             <div class="text-xs font-black uppercase text-gray-500">Cuddle Grade</div>
-                                            <div class="text-3xl font-black text-gray-900">{{ .Points }}</div>
+                                            <div class="text-3xl font-black text-gray-900">{{ .CuddlePoints }}</div>
                                         </div>
                                         <div class="cuddle-badge">Spotlight</div>
                                     </div>
@@ -325,7 +325,7 @@
                                     <div class="font-semibold text-sm font-display text-gray-800">{{ .Name }}</div>
                                     <div class="text-xs text-gray-600">{{ .Team }} • {{ .Position }}</div>
                                 </div>
-                                <div class="cuddle-badge">{{ .Points }}</div>
+                                <div class="cuddle-badge">{{ .CuddlePoints }}</div>
                             </div>
                             {{ end }}
                         </div>
@@ -694,7 +694,7 @@ function draftApp() {
                                 <div class="font-semibold text-sm font-display text-gray-800">${this.escapeHtml(p.name || '')}</div>
                                 <div class="text-xs text-gray-600">${this.escapeHtml(p.team || '')} • ${this.escapeHtml(p.position || '')}</div>
                             </div>
-                            <div class="cuddle-badge">${p.points || 0}</div>
+                            <div class="cuddle-badge">${p.cuddlePoints || p.points || 0}</div>
                         </div>
                     `).join('')}
                    </div>`

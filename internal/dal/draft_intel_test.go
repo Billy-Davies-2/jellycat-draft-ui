@@ -56,6 +56,24 @@ func TestCalculateCurrentPickAddsDraftIntel(t *testing.T) {
 	}
 }
 
+func TestDraftIntelUsesCuddlePointsWhenPointsAreZero(t *testing.T) {
+	lowGrade := models.Player{ID: "low-grade", Name: "Low Grade", Position: "CC", Team: "Test", Points: 0, CuddlePoints: 68, Tier: models.TierC}
+	highGrade := models.Player{ID: "high-grade", Name: "High Grade", Position: "SS", Team: "Test", Points: 0, CuddlePoints: 98, Tier: models.TierS}
+
+	lowAnalytics := buildPlayerAnalytics(lowGrade, models.DraftModeStandard, 1, 0, nil, false)
+	highAnalytics := buildPlayerAnalytics(highGrade, models.DraftModeStandard, 1, 0, nil, false)
+
+	if lowAnalytics.ValueScore == 35 && highAnalytics.ValueScore == 35 {
+		t.Fatalf("value scores should not both clamp to 35 when cuddle points are set: low=%d high=%d", lowAnalytics.ValueScore, highAnalytics.ValueScore)
+	}
+	if highAnalytics.ValueScore <= lowAnalytics.ValueScore {
+		t.Fatalf("higher cuddle grade should have better value score: low=%d high=%d", lowAnalytics.ValueScore, highAnalytics.ValueScore)
+	}
+	if highAnalytics.NeedFit == lowAnalytics.NeedFit {
+		t.Fatalf("fallback fit scores should vary by player seed: low=%d high=%d", lowAnalytics.NeedFit, highAnalytics.NeedFit)
+	}
+}
+
 func TestBingoBoardScalesToPlayerCount(t *testing.T) {
 	state := &models.DraftState{
 		Players:  testPlayers(15, 14),
