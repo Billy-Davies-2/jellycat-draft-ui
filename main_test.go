@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"html/template"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/auth"
@@ -111,6 +114,36 @@ func TestBuildFeaturedProspectsIgnoresDraftedPlayers(t *testing.T) {
 	}
 	if prospects[0].Name != "Available" {
 		t.Fatalf("featured prospect = %q, want available player", prospects[0].Name)
+	}
+}
+
+func TestAdminTemplateRendersTeamManagement(t *testing.T) {
+	tmpl, err := template.ParseFiles("templates/base.html", "templates/admin.html")
+	if err != nil {
+		t.Fatalf("parse admin template: %v", err)
+	}
+
+	data := map[string]interface{}{
+		"Players": []models.Player{},
+		"Teams": []models.Team{
+			{ID: "team-1", Name: "Test Team", Owner: "", Mascot: "T", Color: "bg-blue-100 border-blue-300", Players: []models.Player{}},
+		},
+		"Settings":            models.DefaultDraftSettings(),
+		"ModeOptions":         models.DraftModeOptions(),
+		"AnalyticsConfigured": false,
+		"User":                &auth.User{Name: "Admin"},
+		"IsAdmin":             true,
+	}
+
+	var rendered bytes.Buffer
+	if err := tmpl.ExecuteTemplate(&rendered, "base.html", data); err != nil {
+		t.Fatalf("execute admin template: %v", err)
+	}
+
+	for _, expected := range []string{"Manage Teams", "Add Team", "Move Up", "Unassigned", "editTeamColor"} {
+		if !strings.Contains(rendered.String(), expected) {
+			t.Fatalf("admin template missing %q", expected)
+		}
 	}
 }
 

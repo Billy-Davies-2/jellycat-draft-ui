@@ -96,6 +96,7 @@ func (p *PostgresDAL) initSchema() error {
 		owner TEXT NOT NULL,
 		mascot TEXT NOT NULL,
 		color TEXT NOT NULL,
+		display_order INTEGER,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);
 
@@ -161,6 +162,14 @@ func (p *PostgresDAL) initSchema() error {
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to add draft_pick_number column: %w", err)
+	}
+
+	_, err = p.db.Exec(`
+		ALTER TABLE teams
+		ADD COLUMN IF NOT EXISTS display_order INTEGER
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to add teams display_order column: %w", err)
 	}
 
 	// Seed default data if empty and demo catalog seeding is enabled.
@@ -254,16 +263,16 @@ func (p *PostgresDAL) seedData() error {
 
 		// CloudNativePG optimization: Batch insert teams
 		teamStmt, err := tx.PrepareContext(ctx, `
-			INSERT INTO teams (id, name, owner, mascot, color)
-			VALUES ($1, $2, $3, $4, $5)
+			INSERT INTO teams (id, name, owner, mascot, color, display_order)
+			VALUES ($1, $2, $3, $4, $5, $6)
 		`)
 		if err != nil {
 			return err
 		}
 		defer teamStmt.Close()
 
-		for _, team := range teams {
-			_, err := teamStmt.ExecContext(ctx, team.ID, team.Name, team.Owner, team.Mascot, team.Color)
+		for index, team := range teams {
+			_, err := teamStmt.ExecContext(ctx, team.ID, team.Name, team.Owner, team.Mascot, team.Color, index)
 			if err != nil {
 				return err
 			}
@@ -334,7 +343,7 @@ func (p *PostgresDAL) GetState() (*models.DraftState, error) {
 			tp.player_data
 		FROM teams t
 		LEFT JOIN team_players tp ON t.id = tp.team_id
-		ORDER BY t.created_at, tp.created_at
+		ORDER BY COALESCE(t.display_order, 2147483647), t.created_at, tp.created_at
 	`)
 	if err != nil {
 		return nil, err
@@ -556,23 +565,31 @@ func (p *PostgresDAL) SetPlayerPoints(id string, points int) (*models.Player, er
 }
 
 func (p *PostgresDAL) ReorderTeams(order []string) ([]models.Team, error) {
-	// For Postgres, we can use a CTE with row numbers
-	teams := []models.Team{}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
-	for _, id := range order {
-		var t models.Team
-		err := p.db.QueryRow(`
-			SELECT id, name, owner, mascot, color
-			FROM teams WHERE id = $1
-		`, id).Scan(&t.ID, &t.Name, &t.Owner, &t.Mascot, &t.Color)
+	tx, err := p.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
 
-		if err == nil {
-			t.Players = []models.Player{}
-			teams = append(teams, t)
+	for index, id := range order {
+		if _, err := tx.ExecContext(ctx, `UPDATE teams SET display_order = $1 WHERE id = $2`, index, id); err != nil {
+			return nil, err
 		}
 	}
 
-	return teams, nil
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	state, err := p.GetState()
+	if err != nil {
+		return nil, err
+	}
+
+	return state.Teams, nil
 }
 
 func (p *PostgresDAL) DraftPlayer(playerID, teamID string) error {
@@ -820,10 +837,6 @@ func (p *PostgresDAL) AddTeam(name, owner, mascot, color string) (*models.Team, 
 		"bg-green-100 border-green-300",
 	}
 
-	if owner == "" {
-		owner = "Anonymous"
-	}
-
 	// Count existing teams for default mascot/color
 	var count int
 	p.db.QueryRow("SELECT COUNT(*) FROM teams").Scan(&count)
@@ -845,15 +858,18 @@ func (p *PostgresDAL) AddTeam(name, owner, mascot, color string) (*models.Team, 
 	}
 
 	_, err := p.db.Exec(`
-		INSERT INTO teams (id, name, owner, mascot, color)
-		VALUES ($1, $2, $3, $4, $5)
-	`, team.ID, team.Name, team.Owner, team.Mascot, team.Color)
+		INSERT INTO teams (id, name, owner, mascot, color, display_order)
+		VALUES ($1, $2, $3, $4, $5, $6)
+	`, team.ID, team.Name, team.Owner, team.Mascot, team.Color, count)
 	if err != nil {
 		return nil, err
 	}
 
-	// Add system message
-	msg := fmt.Sprintf("New team joined the draft: %s %s (Owner: %s)", team.Mascot, team.Name, team.Owner)
+	ownerLabel := team.Owner
+	if ownerLabel == "" {
+		ownerLabel = "Unassigned"
+	}
+	msg := fmt.Sprintf("New team joined the draft: %s %s (Owner: %s)", team.Mascot, team.Name, ownerLabel)
 	p.AddChatMessage(msg, "system")
 
 	return team, nil
@@ -871,11 +887,9 @@ func (p *PostgresDAL) UpdateTeam(id, name, owner, mascot, color string) (*models
 		args = append(args, name)
 		paramIdx++
 	}
-	if owner != "" {
-		updates = append(updates, fmt.Sprintf("owner = $%d", paramIdx))
-		args = append(args, owner)
-		paramIdx++
-	}
+	updates = append(updates, fmt.Sprintf("owner = $%d", paramIdx))
+	args = append(args, owner)
+	paramIdx++
 	if mascot != "" {
 		updates = append(updates, fmt.Sprintf("mascot = $%d", paramIdx))
 		args = append(args, mascot)

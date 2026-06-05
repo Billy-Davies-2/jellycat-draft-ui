@@ -57,7 +57,8 @@ func (s *SQLiteDAL) initSchema() error {
 		name TEXT NOT NULL,
 		owner TEXT NOT NULL,
 		mascot TEXT NOT NULL,
-		color TEXT NOT NULL
+		color TEXT NOT NULL,
+		display_order INTEGER
 	);
 
 	CREATE TABLE IF NOT EXISTS team_players (
@@ -121,6 +122,23 @@ func (s *SQLiteDAL) initSchema() error {
 		_, err = s.db.Exec(`ALTER TABLE team_players ADD COLUMN draft_pick_number INTEGER`)
 		if err != nil {
 			return fmt.Errorf("failed to add draft_pick_number column: %w", err)
+		}
+	}
+
+	var teamDisplayOrderExists int
+	err = s.db.QueryRow(`
+		SELECT COUNT(*)
+		FROM pragma_table_info('teams')
+		WHERE name='display_order'
+	`).Scan(&teamDisplayOrderExists)
+	if err != nil {
+		return fmt.Errorf("failed to check teams display_order column existence: %w", err)
+	}
+
+	if teamDisplayOrderExists == 0 {
+		_, err = s.db.Exec(`ALTER TABLE teams ADD COLUMN display_order INTEGER`)
+		if err != nil {
+			return fmt.Errorf("failed to add teams display_order column: %w", err)
 		}
 	}
 
@@ -195,11 +213,11 @@ func (s *SQLiteDAL) seedData() error {
 	// Only insert default teams in development mode
 	if IsDevEnvironment() {
 		teams := getDefaultTeams()
-		for _, t := range teams {
+		for i, t := range teams {
 			_, err := s.db.Exec(`
-				INSERT INTO teams (id, name, owner, mascot, color)
-				VALUES (?, ?, ?, ?, ?)
-			`, t.ID, t.Name, t.Owner, t.Mascot, t.Color)
+				INSERT INTO teams (id, name, owner, mascot, color, display_order)
+				VALUES (?, ?, ?, ?, ?, ?)
+			`, t.ID, t.Name, t.Owner, t.Mascot, t.Color, i)
 			if err != nil {
 				return err
 			}
@@ -259,7 +277,7 @@ func (s *SQLiteDAL) GetState() (*models.DraftState, error) {
 	// Get teams with their players
 	teamRows, err := s.db.Query(`
 		SELECT id, name, owner, mascot, color
-		FROM teams ORDER BY rowid
+		FROM teams ORDER BY COALESCE(display_order, rowid), rowid
 	`)
 	if err != nil {
 		return nil, err
@@ -519,24 +537,28 @@ func (s *SQLiteDAL) SetPlayerPoints(id string, points int) (*models.Player, erro
 }
 
 func (s *SQLiteDAL) ReorderTeams(order []string) ([]models.Team, error) {
-	// SQLite doesn't have a direct way to reorder, so we'll use a temp table
-	// For simplicity, we'll just return teams in the requested order
-	teams := []models.Team{}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
 
-	for _, id := range order {
-		var t models.Team
-		err := s.db.QueryRow(`
-			SELECT id, name, owner, mascot, color
-			FROM teams WHERE id = ?
-		`, id).Scan(&t.ID, &t.Name, &t.Owner, &t.Mascot, &t.Color)
-
-		if err == nil {
-			t.Players = []models.Player{}
-			teams = append(teams, t)
+	for index, id := range order {
+		if _, err := tx.Exec(`UPDATE teams SET display_order = ? WHERE id = ?`, index, id); err != nil {
+			return nil, err
 		}
 	}
 
-	return teams, nil
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	state, err := s.GetState()
+	if err != nil {
+		return nil, err
+	}
+
+	return state.Teams, nil
 }
 
 func (s *SQLiteDAL) DraftPlayer(playerID, teamID string) error {
@@ -791,10 +813,6 @@ func (s *SQLiteDAL) AddTeam(name, owner, mascot, color string) (*models.Team, er
 		"bg-green-100 border-green-300",
 	}
 
-	if owner == "" {
-		owner = "Anonymous"
-	}
-
 	// Count existing teams for default mascot/color
 	var count int
 	s.db.QueryRow("SELECT COUNT(*) FROM teams").Scan(&count)
@@ -816,16 +834,19 @@ func (s *SQLiteDAL) AddTeam(name, owner, mascot, color string) (*models.Team, er
 	}
 
 	_, err := s.db.Exec(`
-		INSERT INTO teams (id, name, owner, mascot, color)
-		VALUES (?, ?, ?, ?, ?)
-	`, team.ID, team.Name, team.Owner, team.Mascot, team.Color)
+		INSERT INTO teams (id, name, owner, mascot, color, display_order)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, team.ID, team.Name, team.Owner, team.Mascot, team.Color, count)
 
 	if err != nil {
 		return nil, err
 	}
 
-	// Add system message
-	msg := fmt.Sprintf("New team joined the draft: %s %s (Owner: %s)", team.Mascot, team.Name, team.Owner)
+	ownerLabel := team.Owner
+	if ownerLabel == "" {
+		ownerLabel = "Unassigned"
+	}
+	msg := fmt.Sprintf("New team joined the draft: %s %s (Owner: %s)", team.Mascot, team.Name, ownerLabel)
 	s.AddChatMessage(msg, "system")
 
 	return team, nil
@@ -841,10 +862,8 @@ func (s *SQLiteDAL) UpdateTeam(id, name, owner, mascot, color string) (*models.T
 		updates = append(updates, "name = ?")
 		args = append(args, name)
 	}
-	if owner != "" {
-		updates = append(updates, "owner = ?")
-		args = append(args, owner)
-	}
+	updates = append(updates, "owner = ?")
+	args = append(args, owner)
 	if mascot != "" {
 		updates = append(updates, "mascot = ?")
 		args = append(args, mascot)

@@ -267,20 +267,27 @@ func (h *APIHandlers) UpdateTeam(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req struct {
-		ID     string `json:"id"`
-		Name   string `json:"name"`
-		Owner  string `json:"owner"`
-		Mascot string `json:"mascot"`
-		Color  string `json:"color"`
-	}
+	var id, name, owner, mascot, color string
+	ownerProvided := false
 
 	// Check content type - handle both JSON and form data
 	contentType := r.Header.Get("Content-Type")
 	if strings.Contains(contentType, "application/json") {
+		var req struct {
+			ID     string  `json:"id"`
+			Name   string  `json:"name"`
+			Owner  *string `json:"owner"`
+			Mascot string  `json:"mascot"`
+			Color  string  `json:"color"`
+		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
+		}
+		id, name, mascot, color = req.ID, req.Name, req.Mascot, req.Color
+		if req.Owner != nil {
+			owner = *req.Owner
+			ownerProvided = true
 		}
 	} else {
 		// Handle form data
@@ -288,19 +295,34 @@ func (h *APIHandlers) UpdateTeam(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		req.ID = r.FormValue("id")
-		req.Name = r.FormValue("name")
-		req.Owner = r.FormValue("owner")
-		req.Mascot = r.FormValue("mascot")
-		req.Color = r.FormValue("color")
+		id = r.FormValue("id")
+		name = r.FormValue("name")
+		owner = r.FormValue("owner")
+		ownerProvided = true
+		mascot = r.FormValue("mascot")
+		color = r.FormValue("color")
 	}
 
-	if req.ID == "" {
+	if id == "" {
 		http.Error(w, "Team ID is required", http.StatusBadRequest)
 		return
 	}
 
-	team, err := h.dal.UpdateTeam(req.ID, req.Name, req.Owner, req.Mascot, req.Color)
+	if !ownerProvided {
+		state, err := h.dal.GetState()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		for _, team := range state.Teams {
+			if team.ID == id {
+				owner = team.Owner
+				break
+			}
+		}
+	}
+
+	team, err := h.dal.UpdateTeam(id, name, owner, mascot, color)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

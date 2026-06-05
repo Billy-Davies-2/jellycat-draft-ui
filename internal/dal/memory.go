@@ -394,9 +394,6 @@ func (m *MemoryDAL) AddTeam(name, owner, mascot, color string) (*models.Team, er
 		"bg-green-100 border-green-300",
 	}
 
-	if owner == "" {
-		owner = "Anonymous"
-	}
 	if mascot == "" {
 		mascot = mascots[len(m.teams)%len(mascots)]
 	}
@@ -415,8 +412,11 @@ func (m *MemoryDAL) AddTeam(name, owner, mascot, color string) (*models.Team, er
 
 	m.teams = append(m.teams, *team)
 
-	// Add system message
-	msg := fmt.Sprintf("New team joined the draft: %s %s (Owner: %s)", team.Mascot, team.Name, team.Owner)
+	ownerLabel := team.Owner
+	if ownerLabel == "" {
+		ownerLabel = "Unassigned"
+	}
+	msg := fmt.Sprintf("New team joined the draft: %s %s (Owner: %s)", team.Mascot, team.Name, ownerLabel)
 	m.addChatMessageUnsafe(msg, "system")
 
 	return team, nil
@@ -431,9 +431,7 @@ func (m *MemoryDAL) UpdateTeam(id, name, owner, mascot, color string) (*models.T
 			if name != "" {
 				m.teams[i].Name = name
 			}
-			if owner != "" {
-				m.teams[i].Owner = owner
-			}
+			m.teams[i].Owner = owner
 			if mascot != "" {
 				m.teams[i].Mascot = mascot
 			}

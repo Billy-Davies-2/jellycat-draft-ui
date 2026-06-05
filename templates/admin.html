@@ -263,7 +263,39 @@
         <div class="p-6 border-b-2 border-gray-900 bg-[#52c7bd]">
             <h2 class="font-display font-black text-2xl text-gray-900">Manage Teams</h2>
         </div>
-        <div class="p-6">
+        <div class="p-6 space-y-6">
+            <form id="addTeamForm" onsubmit="addTeam(event)" class="pick-order-row p-5 bg-[#dff2d9]">
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-semibold text-gray-800 mb-2 font-display">Team Name</label>
+                        <input type="text" name="name" required class="input-jellycat" placeholder="Draft Team">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-800 mb-2 font-display">Owner</label>
+                        <input type="text" name="owner" class="input-jellycat" placeholder="Unassigned">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-800 mb-2 font-display">Mascot</label>
+                        <input type="text" name="mascot" class="input-jellycat" placeholder="Team mark">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-800 mb-2 font-display">Color</label>
+                        <select name="color" class="input-jellycat">
+                            <option value="bg-orange-100 border-orange-300">Orange</option>
+                            <option value="bg-amber-100 border-amber-300">Amber</option>
+                            <option value="bg-pink-100 border-pink-300">Pink</option>
+                            <option value="bg-purple-100 border-purple-300">Purple</option>
+                            <option value="bg-blue-100 border-blue-300">Blue</option>
+                            <option value="bg-yellow-100 border-yellow-300">Yellow</option>
+                            <option value="bg-green-100 border-green-300">Green</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="mt-4 flex justify-end">
+                    <button type="submit" class="btn-jellycat px-6">Add Team</button>
+                </div>
+            </form>
+
             <div id="teams-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                 {{ range .Teams }}
                 <div class="pick-order-row p-5 bg-white hover:shadow-soft-lg transition-all duration-300" data-team-id="{{ .ID }}">
@@ -271,7 +303,7 @@
                         <span class="text-4xl">{{ .Mascot }}</span>
                         <div class="flex-1">
                             <div class="font-bold text-lg font-display text-gray-800">{{ .Name }}</div>
-                            <div class="text-sm text-gray-600">Owner: {{ .Owner }}</div>
+                            <div class="text-sm text-gray-600">Owner: {{ if .Owner }}{{ .Owner }}{{ else }}Unassigned{{ end }}</div>
                         </div>
                     </div>
                     
@@ -280,27 +312,34 @@
                             {{ len .Players }} Players Drafted
                         </span>
                         <span class="text-sm font-bold text-purple-700">
-                            {{ .TotalPoints }} pts
+                            Draft Slot
                         </span>
                     </div>
                     
-                    <!-- Edit/Delete buttons -->
-                    <div class="flex gap-2 mt-3">
-                        {{ if eq (len .Players) 0 }}
-                        <button onclick="openEditTeamModal('{{ .ID }}', '{{ .Name }}', '{{ .Owner }}', '{{ .Mascot }}')" 
-                                class="flex-1 px-3 py-2 rounded-xl text-sm font-semibold text-blue-700 bg-blue-100 hover:bg-blue-200 border-2 border-blue-300 transition-all duration-200">
-                            ✏️ Edit
+                    <div class="grid grid-cols-2 gap-2 mt-3">
+                        <button type="button" class="move-team-btn px-3 py-2 rounded-xl text-sm font-semibold text-purple-700 bg-purple-100 hover:bg-purple-200 border-2 border-purple-300 transition-all duration-200"
+                                data-id="{{ .ID }}" data-direction="-1">
+                            Move Up
                         </button>
-                        <button onclick="deleteTeam('{{ .ID }}', '{{ .Name }}')" 
-                                class="flex-1 px-3 py-2 rounded-xl text-sm font-semibold text-red-700 bg-red-100 hover:bg-red-200 border-2 border-red-300 transition-all duration-200">
-                            🗑️ Delete
+                        <button type="button" class="move-team-btn px-3 py-2 rounded-xl text-sm font-semibold text-purple-700 bg-purple-100 hover:bg-purple-200 border-2 border-purple-300 transition-all duration-200"
+                                data-id="{{ .ID }}" data-direction="1">
+                            Move Down
+                        </button>
+                        {{ if eq (len .Players) 0 }}
+                        <button type="button" class="edit-team-btn px-3 py-2 rounded-xl text-sm font-semibold text-blue-700 bg-blue-100 hover:bg-blue-200 border-2 border-blue-300 transition-all duration-200"
+                                data-id="{{ .ID }}" data-name="{{ .Name }}" data-owner="{{ .Owner }}" data-mascot="{{ .Mascot }}" data-color="{{ .Color }}">
+                            Edit
+                        </button>
+                        <button type="button" class="delete-team-btn px-3 py-2 rounded-xl text-sm font-semibold text-red-700 bg-red-100 hover:bg-red-200 border-2 border-red-300 transition-all duration-200"
+                                data-id="{{ .ID }}" data-name="{{ .Name }}">
+                            Delete
                         </button>
                         {{ else }}
-                        <button onclick="openEditTeamModal('{{ .ID }}', '{{ .Name }}', '{{ .Owner }}', '{{ .Mascot }}')" 
-                                class="flex-1 px-3 py-2 rounded-xl text-sm font-semibold text-blue-700 bg-blue-100 hover:bg-blue-200 border-2 border-blue-300 transition-all duration-200">
-                            ✏️ Edit
+                        <button type="button" class="edit-team-btn px-3 py-2 rounded-xl text-sm font-semibold text-blue-700 bg-blue-100 hover:bg-blue-200 border-2 border-blue-300 transition-all duration-200"
+                                data-id="{{ .ID }}" data-name="{{ .Name }}" data-owner="{{ .Owner }}" data-mascot="{{ .Mascot }}" data-color="{{ .Color }}">
+                            Edit
                         </button>
-                        <div class="flex-1 text-center text-xs text-gray-500 italic py-2">
+                        <div class="text-center text-xs text-gray-500 italic py-2">
                             Cannot delete
                         </div>
                         {{ end }}
@@ -332,7 +371,7 @@
                     
                     <div>
                         <label class="block text-sm font-semibold text-gray-800 mb-2 font-display">Owner</label>
-                        <input type="text" id="editTeamOwner" name="owner" class="input-jellycat">
+                        <input type="text" id="editTeamOwner" name="owner" class="input-jellycat" placeholder="Unassigned">
                     </div>
                     
                     <div>
@@ -340,6 +379,19 @@
                         <input type="text" id="editTeamMascot" name="mascot" class="input-jellycat" placeholder="🦊">
                     </div>
                     
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-800 mb-2 font-display">Color</label>
+                        <select id="editTeamColor" name="color" class="input-jellycat">
+                            <option value="bg-orange-100 border-orange-300">Orange</option>
+                            <option value="bg-amber-100 border-amber-300">Amber</option>
+                            <option value="bg-pink-100 border-pink-300">Pink</option>
+                            <option value="bg-purple-100 border-purple-300">Purple</option>
+                            <option value="bg-blue-100 border-blue-300">Blue</option>
+                            <option value="bg-yellow-100 border-yellow-300">Yellow</option>
+                            <option value="bg-green-100 border-green-300">Green</option>
+                        </select>
+                    </div>
+
                     <div class="flex gap-3">
                         <button type="button" onclick="closeEditTeamModal()" class="flex-1 px-6 py-3 rounded-lg border-2 border-gray-900 font-bold text-gray-700 bg-gray-200 hover:bg-gray-300 transition-all duration-200">
                             Cancel
@@ -474,6 +526,9 @@ document.addEventListener('alpine:init', () => {
                         this.showNotification('Team deleted! 🗑️', 'info');
                     } else if (data.type === 'teams:add') {
                         this.showNotification('New team added! 👥', 'success');
+                        setTimeout(() => window.location.reload(), 500);
+                    } else if (data.type === 'teams:reorder') {
+                        this.showNotification('Draft order updated!', 'success');
                         setTimeout(() => window.location.reload(), 500);
                     } else if (data.type === 'draft:reset') {
                         this.showNotification('Draft reset! 🔄', 'info');
@@ -721,6 +776,27 @@ document.addEventListener('DOMContentLoaded', function() {
             const name = deleteBtn.dataset.name;
             deletePlayer(id, name);
         }
+
+        const editTeamBtn = e.target.closest('.edit-team-btn');
+        if (editTeamBtn) {
+            openEditTeamModal(
+                editTeamBtn.dataset.id,
+                editTeamBtn.dataset.name,
+                editTeamBtn.dataset.owner,
+                editTeamBtn.dataset.mascot,
+                editTeamBtn.dataset.color
+            );
+        }
+
+        const deleteTeamBtn = e.target.closest('.delete-team-btn');
+        if (deleteTeamBtn) {
+            deleteTeam(deleteTeamBtn.dataset.id, deleteTeamBtn.dataset.name);
+        }
+
+        const moveTeamBtn = e.target.closest('.move-team-btn');
+        if (moveTeamBtn) {
+            moveTeam(moveTeamBtn.dataset.id, parseInt(moveTeamBtn.dataset.direction, 10));
+        }
     });
 });
 
@@ -833,11 +909,44 @@ async function deletePlayer(id, name) {
 }
 
 // Team management functions
-function openEditTeamModal(id, name, owner, mascot) {
+async function addTeam(event) {
+    event.preventDefault();
+    const form = event.target;
+    const formData = new FormData(form);
+
+    const data = {
+        name: formData.get('name'),
+        owner: formData.get('owner') || '',
+        mascot: formData.get('mascot') || '',
+        color: formData.get('color') || ''
+    };
+
+    try {
+        const response = await fetch('/api/teams/add', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+
+        if (response.ok) {
+            form.reset();
+        } else {
+            const error = await response.text();
+            alert('Error adding team: ' + error);
+        }
+    } catch (err) {
+        alert('Error adding team: ' + err.message);
+    }
+}
+
+function openEditTeamModal(id, name, owner, mascot, color) {
     document.getElementById('editTeamId').value = id;
     document.getElementById('editTeamName').value = name;
     document.getElementById('editTeamOwner').value = owner;
     document.getElementById('editTeamMascot').value = mascot;
+    document.getElementById('editTeamColor').value = color || 'bg-orange-100 border-orange-300';
     document.getElementById('editTeamModal').classList.remove('hidden');
 }
 
@@ -852,7 +961,8 @@ async function submitEditTeamForm(event) {
         id: document.getElementById('editTeamId').value,
         name: document.getElementById('editTeamName').value,
         owner: document.getElementById('editTeamOwner').value,
-        mascot: document.getElementById('editTeamMascot').value
+        mascot: document.getElementById('editTeamMascot').value,
+        color: document.getElementById('editTeamColor').value
     };
     
     try {
@@ -874,6 +984,36 @@ async function submitEditTeamForm(event) {
         }
     } catch (err) {
         alert('Error updating team: ' + err.message);
+    }
+}
+
+async function moveTeam(id, direction) {
+    const cards = Array.from(document.querySelectorAll('#teams-grid [data-team-id]'));
+    const currentIndex = cards.findIndex(card => card.dataset.teamId === id);
+    const targetIndex = currentIndex + direction;
+
+    if (currentIndex < 0 || targetIndex < 0 || targetIndex >= cards.length) {
+        return;
+    }
+
+    const order = cards.map(card => card.dataset.teamId);
+    [order[currentIndex], order[targetIndex]] = [order[targetIndex], order[currentIndex]];
+
+    try {
+        const response = await fetch('/api/teams/reorder', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ order })
+        });
+
+        if (!response.ok) {
+            const error = await response.text();
+            alert('Error updating draft order: ' + error);
+        }
+    } catch (err) {
+        alert('Error updating draft order: ' + err.message);
     }
 }
 
