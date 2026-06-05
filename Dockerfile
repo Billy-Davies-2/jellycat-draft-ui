@@ -9,7 +9,8 @@ WORKDIR /app
 RUN apk update && apk add --no-cache gcc musl-dev sqlite-dev curl ca-certificates
 
 # Download TailwindCSS standalone CLI
-RUN curl -sL https://github.com/tailwindlabs/tailwindcss/releases/download/v4.1.18/tailwindcss-linux-x64-musl -o tailwindcss && \
+ARG TAILWIND_VERSION=4.1.18
+RUN curl -fsSL https://github.com/tailwindlabs/tailwindcss/releases/download/v${TAILWIND_VERSION}/tailwindcss-linux-x64-musl -o tailwindcss && \
   chmod +x tailwindcss
 # Copy go mod files
 COPY go.mod go.sum ./

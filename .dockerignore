@@ -5,6 +5,11 @@ node_modules
 .next
 out
 dist
+jellycat-draft
+tailwindcss
+tailwindcss-*
+*.sqlite
+*.db
 
 # Logs
 npm-debug.log*
