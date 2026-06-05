@@ -30,18 +30,13 @@
                     </div>
 
                     <div class="mt-8 grid grid-cols-3 gap-3 max-w-2xl">
-                        <div class="product-frame bg-white p-2 shadow-soft-lg rotate-[-2deg]">
-                            <img src="/images/bashful-bunny.png" alt="Bashful Bunny" class="w-full aspect-square object-contain rounded-lg bg-white">
-                            <div class="mt-2 text-center text-xs font-black text-gray-900">No. 1 Board Buzz</div>
+                        {{ range .FeaturedProspects }}
+                        <div class="product-frame bg-white p-2 shadow-soft-lg {{ .FrameClass }}">
+                            <img src="{{ .Image }}" alt="{{ .Name }}" class="w-full aspect-square object-contain rounded-lg bg-white" onerror="this.src='/images/placeholder.png'">
+                            <div class="mt-2 text-center text-xs font-black text-gray-900 truncate">{{ .Label }}</div>
+                            <div class="mt-1 text-center text-[0.65rem] font-bold text-gray-700 truncate">{{ .Name }}</div>
                         </div>
-                        <div class="product-frame bg-white p-2 shadow-soft-lg translate-y-6 rotate-[2deg]">
-                            <img src="/images/jellycat-dragon.png" alt="Jellycat Dragon" class="w-full aspect-square object-contain rounded-lg bg-white">
-                            <div class="mt-2 text-center text-xs font-black text-gray-900">Sleeper Pick</div>
-                        </div>
-                        <div class="product-frame bg-white p-2 shadow-soft-lg rotate-[-1deg]">
-                            <img src="/images/amuseable-avocado.png" alt="Amuseable Avocado" class="w-full aspect-square object-contain rounded-lg bg-white">
-                            <div class="mt-2 text-center text-xs font-black text-gray-900">Fan Favorite</div>
-                        </div>
+                        {{ end }}
                     </div>
                 </div>
 

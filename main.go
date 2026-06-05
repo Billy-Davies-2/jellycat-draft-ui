@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"hash/fnv"
 	"html/template"
 	"io"
 	"log"
@@ -11,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -41,6 +43,18 @@ var (
 		Close() error
 	}
 )
+
+type featuredProspect struct {
+	Name       string
+	Image      string
+	Category   string
+	Label      string
+	FrameClass string
+}
+
+var featuredProspectLabels = []string{"Board Buzz", "Sleeper Pick", "Fan Favorite"}
+
+var featuredProspectFrames = []string{"rotate-[-2deg]", "translate-y-6 rotate-[2deg]", "rotate-[-1deg]"}
 
 func main() {
 	// Initialize logger first
@@ -432,11 +446,12 @@ func startHandler(w http.ResponseWriter, r *http.Request) {
 
 	user := auth.GetUser(r)
 	data := map[string]interface{}{
-		"Teams":       state.Teams,
-		"Settings":    state.Settings,
-		"ModeOptions": models.DraftModeOptions(),
-		"User":        user,
-		"IsAdmin":     auth.IsAdmin(user),
+		"Teams":             state.Teams,
+		"Settings":          state.Settings,
+		"ModeOptions":       models.DraftModeOptions(),
+		"FeaturedProspects": buildFeaturedProspects(state.Players, homeProspectSeed(state)),
+		"User":              user,
+		"IsAdmin":           auth.IsAdmin(user),
 	}
 	for key, value := range roomTemplateData(r) {
 		data[key] = value
@@ -452,6 +467,123 @@ func startHandler(w http.ResponseWriter, r *http.Request) {
 	if err := tmpl.ExecuteTemplate(w, "base.html", data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+func homeProspectSeed(state *models.DraftState) string {
+	if state == nil {
+		return draftRoom.Code()
+	}
+
+	return strings.Join([]string{
+		draftRoom.Code(),
+		string(state.Settings.Mode),
+		state.CurrentTeamID,
+		state.CurrentTeamName,
+	}, "|")
+}
+
+func buildFeaturedProspects(players []models.Player, seed string) []featuredProspect {
+	candidatesByCategory := map[string][]models.Player{}
+	categories := []string{}
+
+	for _, player := range players {
+		if player.Drafted {
+			continue
+		}
+
+		category := playerCategory(player)
+		if _, exists := candidatesByCategory[category]; !exists {
+			categories = append(categories, category)
+		}
+		candidatesByCategory[category] = append(candidatesByCategory[category], player)
+	}
+
+	sort.SliceStable(categories, func(leftIndex, rightIndex int) bool {
+		leftCategory := categories[leftIndex]
+		rightCategory := categories[rightIndex]
+		return homeProspectHash(seed, leftCategory) < homeProspectHash(seed, rightCategory)
+	})
+
+	selected := make([]models.Player, 0, len(featuredProspectLabels))
+	selectedIDs := map[string]bool{}
+	for _, category := range categories {
+		if len(selected) == len(featuredProspectLabels) {
+			break
+		}
+
+		playersInCategory := append([]models.Player(nil), candidatesByCategory[category]...)
+		sort.SliceStable(playersInCategory, func(leftIndex, rightIndex int) bool {
+			leftPlayer := playersInCategory[leftIndex]
+			rightPlayer := playersInCategory[rightIndex]
+			return homeProspectHash(seed, category, leftPlayer.ID, leftPlayer.Name) < homeProspectHash(seed, category, rightPlayer.ID, rightPlayer.Name)
+		})
+
+		selected = append(selected, playersInCategory[0])
+		selectedIDs[playersInCategory[0].ID] = true
+	}
+
+	if len(selected) < len(featuredProspectLabels) {
+		remaining := make([]models.Player, 0, len(players))
+		for _, player := range players {
+			if player.Drafted || selectedIDs[player.ID] {
+				continue
+			}
+			remaining = append(remaining, player)
+		}
+		sort.SliceStable(remaining, func(leftIndex, rightIndex int) bool {
+			leftPlayer := remaining[leftIndex]
+			rightPlayer := remaining[rightIndex]
+			return homeProspectHash(seed, leftPlayer.ID, leftPlayer.Name) < homeProspectHash(seed, rightPlayer.ID, rightPlayer.Name)
+		})
+
+		for _, player := range remaining {
+			if len(selected) == len(featuredProspectLabels) {
+				break
+			}
+			selected = append(selected, player)
+		}
+	}
+
+	prospects := make([]featuredProspect, 0, len(selected))
+	for index, player := range selected {
+		image := strings.TrimSpace(player.Image)
+		if image == "" {
+			image = "/images/placeholder.png"
+		}
+
+		prospects = append(prospects, featuredProspect{
+			Name:       player.Name,
+			Image:      image,
+			Category:   playerCategory(player),
+			Label:      featuredProspectLabels[index%len(featuredProspectLabels)],
+			FrameClass: featuredProspectFrames[index%len(featuredProspectFrames)],
+		})
+	}
+
+	return prospects
+}
+
+func playerCategory(player models.Player) string {
+	category := strings.TrimSpace(player.Team)
+	if category != "" {
+		return category
+	}
+
+	category = strings.TrimSpace(player.Position)
+	if category != "" {
+		return category
+	}
+
+	return "Prospect"
+}
+
+func homeProspectHash(parts ...string) uint32 {
+	hasher := fnv.New32a()
+	for _, part := range parts {
+		_, _ = hasher.Write([]byte(part))
+		_, _ = hasher.Write([]byte("|"))
+	}
+	return hasher.Sum32()
 }
 
 func draftHandler(w http.ResponseWriter, r *http.Request) {
