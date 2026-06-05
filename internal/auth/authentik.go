@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -241,8 +243,58 @@ func IsAdmin(user *User) bool {
 	if user == nil {
 		return false
 	}
-	for _, group := range user.Groups {
-		if group == "admins" {
+
+	claim := strings.ToLower(strings.TrimSpace(os.Getenv("AUTH_ADMIN_CLAIM")))
+	if claim == "" {
+		claim = "groups"
+	}
+
+	allowedValues := splitAdminValues(os.Getenv("AUTH_ADMIN_VALUE"))
+	if len(allowedValues) == 0 {
+		allowedValues = []string{"admins"}
+	}
+
+	switch claim {
+	case "sub", "id", "user_id", "userid":
+		return containsAdminValue(allowedValues, user.ID)
+	case "email":
+		return containsAdminValue(allowedValues, user.Email)
+	case "preferred_username", "username":
+		return containsAdminValue(allowedValues, user.Username)
+	case "name":
+		return containsAdminValue(allowedValues, user.Name)
+	case "groups", "group":
+		for _, group := range user.Groups {
+			if containsAdminValue(allowedValues, group) {
+				return true
+			}
+		}
+		return false
+	default:
+		return false
+	}
+}
+
+func splitAdminValues(value string) []string {
+	parts := strings.Split(value, ",")
+	values := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			values = append(values, part)
+		}
+	}
+	return values
+}
+
+func containsAdminValue(allowedValues []string, actualValue string) bool {
+	actualValue = strings.TrimSpace(actualValue)
+	if actualValue == "" {
+		return false
+	}
+
+	for _, allowedValue := range allowedValues {
+		if strings.EqualFold(strings.TrimSpace(allowedValue), actualValue) {
 			return true
 		}
 	}
