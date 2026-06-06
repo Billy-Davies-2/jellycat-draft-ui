@@ -174,10 +174,15 @@ func roomJoinHandler(w http.ResponseWriter, r *http.Request) {
 	var team *models.Team
 	if request.TeamID != "" {
 		team, err = findTeamByID(request.TeamID)
+		if err == nil && strings.TrimSpace(team.Owner) == "" {
+			team, err = dataStore.UpdateTeam(team.ID, team.Name, request.Username, team.Mascot, team.Color)
+			if err == nil {
+				publishRoomTeamUpdateEvent(team)
+			}
+		}
 	} else {
 		if request.TeamName == "" {
-			http.Error(w, "Team name is required", http.StatusBadRequest)
-			return
+			request.TeamName = request.Username
 		}
 		team, err = dataStore.AddTeam(request.TeamName, request.Username, "", "")
 		if err == nil {
@@ -252,6 +257,18 @@ func publishRoomJoinEvents(team *models.Team) {
 		Type: "chat:add",
 		Payload: map[string]interface{}{
 			"type": "system",
+		},
+	})
+}
+
+func publishRoomTeamUpdateEvent(team *models.Team) {
+	if ps == nil || team == nil {
+		return
+	}
+	ps.Publish(pubsub.Event{
+		Type: "teams:update",
+		Payload: map[string]interface{}{
+			"id": team.ID,
 		},
 	})
 }

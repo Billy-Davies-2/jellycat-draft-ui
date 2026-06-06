@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"html/template"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/auth"
+	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/dal"
 	"github.com/Billy-Davies-2/jellycat-draft-ui/internal/models"
 )
 
@@ -144,6 +146,165 @@ func TestAdminTemplateRendersTeamManagement(t *testing.T) {
 		if !strings.Contains(rendered.String(), expected) {
 			t.Fatalf("admin template missing %q", expected)
 		}
+	}
+}
+
+func TestDraftAndPickTemplatesRenderRoomUX(t *testing.T) {
+	data := map[string]interface{}{
+		"Players": []models.Player{
+			{
+				ID:           "player-1",
+				Name:         "Keli Pelican",
+				Position:     "CH",
+				Team:         "Ocean Motion",
+				CuddlePoints: 73,
+				Tier:         models.TierC,
+				Image:        "/images/keli.png",
+				Analytics: models.PlayerAnalytics{
+					PickScore:  81,
+					ValueScore: 72,
+					CrowdHeat:  80,
+					NeedFit:    70,
+					TrendLabel: "+2%",
+					Label:      "Steady pick",
+					Reason:     "Balanced profile.",
+					Sparkline:  []int{20, 40, 60},
+				},
+			},
+		},
+		"Teams": []models.Team{
+			{ID: "team-1", Name: "Draft Slot 1", Owner: "Taylor", Mascot: "T", Color: "bg-blue-100 border-blue-300", Players: []models.Player{}},
+		},
+		"Chat":                []models.ChatMessage{},
+		"Settings":            models.DefaultDraftSettings(),
+		"ModeOptions":         models.DraftModeOptions(),
+		"IsBingoMode":         false,
+		"IsWheelMode":         false,
+		"DraftOrder":          []models.DraftOrderEntry{{Pick: 1, Round: 1, TeamID: "team-1", TeamName: "Draft Slot 1", Mascot: "T", Active: true}},
+		"BingoBoard":          []models.BingoSquare{},
+		"CurrentBingoPrompt":  "",
+		"WheelSlots":          []models.WheelSlot{},
+		"SuggestedPick":       nil,
+		"AnalyticsConfigured": false,
+		"User":                &auth.User{Name: "Taylor"},
+		"IsAdmin":             false,
+		"CurrentPick":         1,
+		"CurrentRound":        1,
+		"PickInRound":         1,
+		"CurrentTeamID":       "team-1",
+		"CurrentTeamName":     "Draft Slot 1",
+		"UserTeamID":          "team-1",
+		"IsUserTurn":          true,
+		"InitialRoomCode":     "A123",
+		"RoomCode":            "A123",
+		"JoinPath":            "/join?code=A123",
+		"JoinURL":             "https://example.test/join?code=A123",
+		"JoinQRPath":          "/api/room/qr?code=A123",
+	}
+
+	expectedByTemplate := map[string][]string{
+		"templates/draft.html": {"Draft Lobby", "Waiting Room", "Taylor", "Draft Slot 1"},
+		"templates/pick.html":  {"Optional team nickname", "Draft Slots", "Taylor", "Draft Slot 1"},
+	}
+
+	for _, templateFile := range []string{"templates/draft.html", "templates/pick.html"} {
+		t.Run(templateFile, func(t *testing.T) {
+			tmpl, err := template.ParseFiles("templates/base.html", templateFile)
+			if err != nil {
+				t.Fatalf("parse template: %v", err)
+			}
+
+			var rendered bytes.Buffer
+			if err := tmpl.ExecuteTemplate(&rendered, "base.html", data); err != nil {
+				t.Fatalf("execute template: %v", err)
+			}
+
+			output := rendered.String()
+			for _, expected := range expectedByTemplate[templateFile] {
+				if !strings.Contains(output, expected) {
+					t.Fatalf("template missing %q", expected)
+				}
+			}
+		})
+	}
+}
+
+func TestRoomJoinDefaultsTeamNameToUsername(t *testing.T) {
+	originalStore := dataStore
+	originalRoom := draftRoom
+	originalPubSub := ps
+	defer func() {
+		dataStore = originalStore
+		draftRoom = originalRoom
+		ps = originalPubSub
+	}()
+
+	dataStore = dal.NewMemoryDAL()
+	draftRoom = newRoomState("A123")
+	ps = nil
+
+	body := strings.NewReader(`{"code":"A123","username":"Taylor"}`)
+	request := httptest.NewRequest(http.MethodPost, "/api/room/join", body)
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	roomJoinHandler(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+
+	var response roomJoinResponse
+	if err := json.NewDecoder(recorder.Body).Decode(&response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if response.Team.Name != "Taylor" {
+		t.Fatalf("team name = %q, want %q", response.Team.Name, "Taylor")
+	}
+	if response.Team.Owner != "Taylor" {
+		t.Fatalf("team owner = %q, want %q", response.Team.Owner, "Taylor")
+	}
+}
+
+func TestRoomJoinClaimsUnassignedTeam(t *testing.T) {
+	originalStore := dataStore
+	originalRoom := draftRoom
+	originalPubSub := ps
+	defer func() {
+		dataStore = originalStore
+		draftRoom = originalRoom
+		ps = originalPubSub
+	}()
+
+	store := dal.NewMemoryDAL()
+	team, err := store.AddTeam("Draft Slot 1", "", "", "")
+	if err != nil {
+		t.Fatalf("AddTeam() failed: %v", err)
+	}
+	dataStore = store
+	draftRoom = newRoomState("A123")
+	ps = nil
+
+	body := strings.NewReader(`{"code":"A123","username":"Taylor","teamId":"` + team.ID + `"}`)
+	request := httptest.NewRequest(http.MethodPost, "/api/room/join", body)
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	roomJoinHandler(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+
+	var response roomJoinResponse
+	if err := json.NewDecoder(recorder.Body).Decode(&response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if response.Team.Name != "Draft Slot 1" {
+		t.Fatalf("team name = %q, want %q", response.Team.Name, "Draft Slot 1")
+	}
+	if response.Team.Owner != "Taylor" {
+		t.Fatalf("team owner = %q, want %q", response.Team.Owner, "Taylor")
 	}
 }
 

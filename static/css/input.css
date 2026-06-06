@@ -654,9 +654,126 @@ body {
   box-shadow: 4px 4px 0 rgba(47, 41, 36, 0.12);
 }
 
+.optional-team-panel {
+  padding: 0.75rem;
+  border: 2px dashed #2f2924;
+  border-radius: 8px;
+  background: #fff8ea;
+}
+
+.optional-team-panel summary {
+  cursor: pointer;
+  color: #2f2924;
+  font-size: 0.82rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
 .room-display-pairing {
   background:
     linear-gradient(135deg, rgba(255, 253, 247, 0.96) 0%, rgba(255, 241, 209, 0.96) 54%, rgba(232, 245, 242, 0.96) 100%);
+}
+
+.waiting-room-display {
+  padding: 1rem;
+  border: 2px solid #2f2924;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #fffdf7 0%, #e8f5f2 100%);
+  box-shadow: 6px 6px 0 rgba(47, 41, 36, 0.16);
+}
+
+.waiting-room-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  margin-bottom: 1rem;
+}
+
+.waiting-room-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  min-width: 6rem;
+  padding: 0.55rem 0.9rem;
+  border: 2px solid #2f2924;
+  border-radius: 8px;
+  background: #52c7bd;
+  color: #102822;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 900;
+  box-shadow: 3px 3px 0 #2f2924;
+}
+
+.waiting-room-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.75rem;
+}
+
+.waiting-room-card,
+.waiting-room-empty {
+  min-width: 0;
+  border: 2px solid #2f2924;
+  border-radius: 8px;
+  background: #fffdf7;
+  box-shadow: 4px 4px 0 rgba(47, 41, 36, 0.12);
+}
+
+.waiting-room-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem;
+}
+
+.waiting-room-avatar {
+  display: grid;
+  place-items: center;
+  flex: 0 0 3rem;
+  width: 3rem;
+  height: 3rem;
+  border: 2px solid #2f2924;
+  border-radius: 8px;
+  background: #f6d46b;
+  font-size: 1.55rem;
+}
+
+.waiting-room-name {
+  overflow: hidden;
+  color: #2f2924;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 900;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.waiting-room-meta {
+  overflow: hidden;
+  margin-top: 0.2rem;
+  color: #6b625a;
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.waiting-room-empty {
+  padding: 1rem;
+  color: #6b625a;
+  font-weight: 900;
+}
+
+@media (min-width: 768px) {
+  .waiting-room-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
 }
 
 @media (min-width: 1024px) {

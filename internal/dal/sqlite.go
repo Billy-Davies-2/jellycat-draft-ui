@@ -680,7 +680,11 @@ func (s *SQLiteDAL) DraftPlayer(playerID, teamID string) error {
 }
 
 func sqliteTeamsForTurn(tx *sql.Tx) ([]models.Team, error) {
-	rows, err := tx.Query(`SELECT id, name, owner, mascot, color FROM teams ORDER BY rowid`)
+	rows, err := tx.Query(`
+		SELECT id, name, owner, mascot, color
+		FROM teams
+		ORDER BY COALESCE(display_order, rowid), rowid
+	`)
 	if err != nil {
 		return nil, err
 	}

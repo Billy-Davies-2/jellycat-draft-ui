@@ -18,16 +18,19 @@
 
             <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_24rem] gap-4">
                 <div class="card-jellycat p-5">
-                    <div class="section-kicker">TV Room Code</div>
+                    <div class="section-kicker">Join The Draft</div>
                     <form @submit.prevent="createTeam" class="mt-4 space-y-3">
                         <label for="phone-room-code" class="sr-only">Room Code</label>
                         <input id="phone-room-code" type="text" x-model="roomCode" class="input-jellycat room-code-input" placeholder="Room code" maxlength="4" autocomplete="one-time-code" required>
 
                         <label for="phone-owner-name" class="sr-only">Username</label>
-                        <input id="phone-owner-name" type="text" x-model="ownerName" class="input-jellycat" placeholder="Username" maxlength="80" autocomplete="name" required>
+                        <input id="phone-owner-name" type="text" x-model="ownerName" class="input-jellycat" placeholder="Your name" maxlength="80" autocomplete="name" required>
 
-                        <label for="phone-team-name" class="sr-only">Team Name</label>
-                        <input id="phone-team-name" type="text" x-model="newTeamName" class="input-jellycat" placeholder="Team name" maxlength="80" required>
+                        <details class="optional-team-panel">
+                            <summary>Optional team nickname</summary>
+                            <label for="phone-team-name" class="sr-only">Team Nickname</label>
+                            <input id="phone-team-name" type="text" x-model="newTeamName" class="input-jellycat mt-3" placeholder="Leave blank to use your name" maxlength="80">
+                        </details>
 
                         <button type="submit" class="btn-jellycat w-full" :disabled="joiningInProgress">
                             <span x-text="joiningInProgress ? 'Joining...' : 'Join Draft Room'"></span>
@@ -43,19 +46,23 @@
                 </div>
 
                 <div class="card-jellycat p-5">
-                    <div class="section-kicker">Existing Teams</div>
-                    <p class="mt-2 text-sm font-bold text-gray-600">Use the TV code and username, then tap your team.</p>
+                    <div class="section-kicker">Draft Slots</div>
+                    <p class="mt-2 text-sm font-bold text-gray-600">Use the TV code and your name, then tap your slot if the commissioner already made one.</p>
                     <div class="mt-4 grid grid-cols-1 gap-3 max-h-[28rem] overflow-y-auto pr-1">
                         {{ range .Teams }}
                         <button type="button"
                                 class="team-join-card"
                                 data-join-team-id="{{ .ID }}"
-                                data-join-team-name="{{ .Name }}"
+                                data-join-team-name="{{ if .Owner }}{{ .Owner }}{{ else }}{{ .Name }}{{ end }}"
                                 @click="joinTeam($el)">
                             <span class="text-2xl">{{ .Mascot }}</span>
                             <span class="min-w-0 flex-1 text-left">
-                                <span class="block font-display font-black text-gray-900 truncate">{{ .Name }}</span>
-                                <span class="block text-xs font-bold text-gray-600 truncate">{{ .Owner }}</span>
+                                <span class="block font-display font-black text-gray-900 truncate">{{ if .Owner }}{{ .Owner }}{{ else }}{{ .Name }}{{ end }}</span>
+                                {{ if and .Owner (ne .Owner .Name) }}
+                                <span class="block text-xs font-bold text-gray-600 truncate">{{ .Name }}</span>
+                                {{ else }}
+                                <span class="block text-xs font-bold text-gray-600 truncate">Draft slot</span>
+                                {{ end }}
                             </span>
                             <span class="draft-pill text-xs">Join</span>
                         </button>
@@ -329,10 +336,12 @@ function pickApp() {
         },
 
         async createTeam() {
-            const name = this.newTeamName.trim();
-            if (!this.validateRoomFields(true)) {
+            if (!this.validateRoomFields()) {
                 return;
             }
+
+            const username = this.ownerName.trim();
+            const teamName = this.newTeamName.trim() || username;
 
             this.joiningInProgress = true;
             try {
@@ -341,8 +350,8 @@ function pickApp() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         code: this.roomCode,
-                        username: this.ownerName.trim(),
-                        teamName: name
+                        username,
+                        teamName
                     })
                 });
 
@@ -365,7 +374,7 @@ function pickApp() {
         },
 
         async joinTeam(button) {
-            if (!this.validateRoomFields(false)) {
+            if (!this.validateRoomFields()) {
                 return;
             }
 
@@ -421,7 +430,7 @@ function pickApp() {
             this.turnStatus = 'Waiting';
         },
 
-        validateRoomFields(requireTeamName) {
+        validateRoomFields() {
             this.roomCode = this.normalizeRoomCode(this.roomCode);
             if (this.roomCode.length !== 4) {
                 this.showNotification('Enter the 4-character room code.', 'error');
@@ -429,10 +438,6 @@ function pickApp() {
             }
             if (!this.ownerName.trim()) {
                 this.showNotification('Username is required.', 'error');
-                return false;
-            }
-            if (requireTeamName && !this.newTeamName.trim()) {
-                this.showNotification('Team name is required.', 'error');
                 return false;
             }
             return true;

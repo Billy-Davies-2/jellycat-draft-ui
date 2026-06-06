@@ -712,7 +712,11 @@ func (p *PostgresDAL) DraftPlayer(playerID, teamID string) error {
 }
 
 func postgresTeamsForTurn(ctx context.Context, tx *sql.Tx) ([]models.Team, error) {
-	rows, err := tx.QueryContext(ctx, `SELECT id, name, owner, mascot, color FROM teams ORDER BY created_at`)
+	rows, err := tx.QueryContext(ctx, `
+		SELECT id, name, owner, mascot, color
+		FROM teams
+		ORDER BY COALESCE(display_order, 2147483647), created_at
+	`)
 	if err != nil {
 		return nil, err
 	}
